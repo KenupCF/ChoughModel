@@ -1,0 +1,905 @@
+---
+title: 'Red Squirrel National Recovery: Expert Elicitation'
+output:
+  html_document:
+    includes:
+      in_header: foo.html
+    toc: true
+    toc_float: true
+    css: style.css
+  pdf_document:
+    toc: true
+resource_files: "Libraries/datatables-rowsgroup-master/dataTables.rowsGroup.js"
+---
+
+```{r setup, include=FALSE,eval=T}
+
+useshiny<-FALSE
+toggleComment<-TRUE
+downloadFromDrive<-F
+plotShadeToggle<-F
+options(stringsAsFactors = FALSE)
+
+original_wd<-getwd()
+### Loading packages necessary for the app to run 
+### (Try to trim it, removing some un-necessary packages?)
+library(shiny)
+library(shinyalert)
+library(shinyWidgets)
+
+library(shinyBS)
+library(htmlwidgets)
+library(tippy)
+library(slickR)
+# library(DT)
+# library(grid)
+# library(gridExtra)
+# library(knitr)
+library(here)
+# library(kableExtra)
+# library(readxl)
+library(plyr)
+library(dplyr)
+library(gtools)
+library(tidyr)
+library(purrr)
+# library(zoo)
+
+library(shinyjs)
+library(htmltools)
+# require(httpuv)
+library(mc2d)
+# library(grDevices)
+library(ggtext)
+library(ggplot2)
+library(viridis)
+library(ggimage)
+library(kableExtra)
+# library(magick)
+# library(cowplot)
+library(pryr)
+library(stringr)
+library(lubridate)
+library(googledrive)
+library(devtools)
+# library(rvest)
+
+
+shinyOptions(cache = cachem::cache_disk(getwd()))
+
+
+strip_html <- function(s) {
+    html_text(read_html(s))
+}
+# library(rmapshaper)
+
+#### Load workspace
+
+################
+###Functions###
+###############
+
+# devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/solvePERT.R")
+
+devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/multiUserPERTplot.R")
+
+devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/phd_experimental_functions.R")
+
+devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/Quick%20Functions.R")
+
+###################################
+##Starting variables for document##
+###################################
+name<-""
+nameEnv<-where("name")
+email_user<-""
+emailEnv<-where("email_user")
+validEmail<-FALSE
+
+# load("Effort_Tables.RData")
+
+responseSummary<-TRUE
+
+#Number of questions, to be filled manually (important for the progressbar)
+number_of_questions<-34
+
+# Whether expert filled in his username, and the environment of the variable
+name_filled<-FALSE
+name_filledEnv<-where("name_filled")
+
+# Current alias of the expert, saved in a .csv file in the server
+# currentAlias<-""
+# write.csv(currentAlias,file="currentAlias.csv",row.names=FALSE)
+# currentAliasEnv<-where("currentAlias")
+
+# Whether the user loaded previous answers, saved in a .csv file
+user_loaded<-FALSE
+write.csv(user_loaded,file="user_loaded.csv",row.names=FALSE)
+user_loadedEnv<-where("user_loaded")
+
+# Important .csv with default answers
+setwd("C:/Users/caiok/Dropbox/03-Work/01-Science/00-Research Projects/ChoughElicitationApp")
+defaultAnswers<-read.csv("./Private/Answers_default_pert.csv")%>%
+  mutate(priority=0)
+defaultAnswersOriginal<-defaultAnswers
+defaultAnswersEnv<-where("defaultAnswers")
+
+# CSV contaning expert aliases
+expert.aliases<-read.csv("./Private/Experts_Alias.csv")%>%
+  dplyr::filter(!is.na(email))%>%
+  dplyr::select(email,Alias)
+expert.pins   <-read.csv("./Private/Experts_Alias.csv",colClasses = "character")%>%
+  dplyr::filter(!is.na(email))%>%
+  dplyr::select(email,PIN)
+
+# Create copy of defaultAnswers, 'basedf'
+# This is important, basedf is the object that 
+# will be changed to incorporate the answers of the experts
+basedf<-defaultAnswers
+basedfEnv<-where("basedf")
+
+### Acessing Google Drive
+token <- readRDS(".secrets/token.rds")
+drive_auth(token = token)
+
+
+#Loading previous answers from all users into main environment
+
+folder_ids<-c("1pvO9_vw23Ho4rlQ4239bWGSt9O0lfikh","1GL0oeFnMDlIIgO3WQe_KuiMIgjYB-zMe")
+
+if(downloadFromDrive){
+for(folder_id in folder_ids){
+
+# folder_id<-"1Lzn4p5S4pXWYtuHqetKHy-uDlr_EXRA9"
+files_in_folder <- drive_ls(as_id(folder_id))
+
+#Find csvs with responses into dropbox
+previousAnswersDF_all<-files_in_folder%>%
+  dplyr::filter(str_detect(name,"_response_expert.csv"))%>%
+  dplyr::mutate(modified_time = map_chr(drive_resource, "modifiedTime"))%>%
+  dplyr::mutate(email=gsub(x=name,"_ts_.*$",""))%>%
+  dplyr::mutate(ts=gsub(x=gsub(x=name,"^.*_ts_",""),"_.*$",""))
+
+
+previousAnswersDF<-previousAnswersDF_all%>%
+  group_by(email)%>%
+  dplyr::arrange(desc(ts))%>%
+  dplyr::filter(!duplicated(email))%>%
+  dplyr::ungroup()%>%
+  dplyr::mutate(download_path=paste0("./Private/Answers/Summary/",name))
+
+# Download each file
+
+lapply(seq_along(previousAnswersDF$id),function(i){
+  idLoop<-previousAnswersDF$id[i]
+  pathLoop<-previousAnswersDF$download_path[i]
+  drive_download(as_id(idLoop), path = pathLoop, overwrite = TRUE)
+})
+
+# cat("All files downloaded successfully.")
+}
+}
+#List only responses from WD
+responses.csvs<-list.files(path = "./Private/Answers/Summary/",pattern="_response_expert.csv",full.names = T)
+
+
+# cat("Trying to read files")
+
+#Create data.frame with responses
+if(length(responses.csvs)>0){
+full.responses<-rbind.fill(lapply(responses.csvs,read.csv))
+}else{
+  full.responses<-defaultAnswers[1,]
+}
+full.responses$Alias.x<-NULL
+full.responses$Alias.y<-NULL
+full.responses$Alias<-NULL
+
+# cat("All files read")
+
+###
+###Dealing with all responses
+###
+
+full.responses<-full.responses%>%
+  # dplyr::filter(!(min==0&max==0))%>%
+  dplyr::arrange(desc(timestamp))%>%
+  dplyr::group_by(email,question,species,alternative)%>%
+  dplyr::filter(timestamp==max(timestamp))%>%
+  dplyr::filter(!duplicated(data.frame(email,question,species,alternative,timestamp,min,mode,max,confidence)))
+  
+
+equal_ABC<-(full.responses$max == full.responses$mode) &
+  (full.responses$max == full.responses$min)
+
+full.responses$equal_ABC<-equal_ABC
+
+#average<-full.responses%>%
+#  dplyr::group_by(question)%>%
+#  dplyr::summarise(mode=mean(mode),
+#            trueMin=mean(trueMin),
+#            trueMax=mean(trueMax),
+#            shape=mean(shape),
+#            name="Average",
+#            alias="Average")%>%
+#  dplyr::mutate(equal_ABC= trueMin == mode & mode == trueMax)
+
+responses_anon<-full.responses%>%
+  dplyr::mutate(email=tolower(email))%>%
+  merge(expert.aliases%>%mutate(email=tolower(email))%>%dplyr::select(Alias,email),by="email")%>%
+  dplyr::select(Alias,question,alternative,
+                trueMin,min,mode,max,trueMax,confidence,comment,timestamp,self_reported_expertise)
+
+responses_anon_short<-responses_anon%>%
+  dplyr::arrange(desc(timestamp))%>%
+  dplyr::filter(!duplicated(data.frame(Alias,question,alternative)))%>%
+  dplyr::ungroup()%>%
+  dplyr::mutate(id=1:n())%>%
+  # merge(nulled_answers,by=c("Alias","question","alternative"),all.x=T)%>%
+  # dplyr::mutate(flagged_to_remove=
+  #                 case_when(
+  #                           # min < naturalMin ~ TRUE,
+  #                           # max > naturalMax ~ TRUE,
+  #                           is.na(flagged_to_remove)~FALSE,
+  #                           TRUE~flagged_to_remove))%>%
+  # dplyr::filter(!flagged_to_remove)%>%
+  merge(defaultAnswers%>%
+        dplyr::rename(defMin=min,defMode=mode,defMax=max)%>%
+        dplyr::select("question","alternative","naturalMin","naturalMax","dist2fit","defMin","defMode","defMax"),
+        by=c("question","alternative"),all.x=T,all.y=F)%>%
+  dplyr::mutate(oob=min<naturalMin | max>naturalMax)%>%
+  dplyr::mutate(no_uncertainty=min==max)%>%
+  dplyr::filter(timestamp>0)%>%
+  dplyr::filter(!str_detect(Alias,"admin"))
+  
+NaNtext<-c("Not an Expert","Unable to Answer")
+
+
+setwd(original_wd)
+
+```
+
+```{r apps, include=FALSE}
+
+source("./QuestionFunctions/General.R")
+source("./QuestionFunctions/QuestionApps.R")
+source("./QuestionFunctions/PlotsPDF.R")
+source("./QuestionFunctions/WafflePlot.R")
+source("./QuestionFunctions/SurvivalPlot.R")
+source("./QuestionFunctions/LayoutFunctions.R")
+source("./QuestionFunctions/SolvePERT.R")
+# source("./Private/Answers/foo.R") #this is just to create the folder "Answers" inside "Private"
+# source("./ProcessingFunctions/PlotSummary.R")
+# source("./ProcessingFunctions/TableSummary.R")
+# source("./ProcessingFunctions/CommentList.R")
+
+```
+
+```{r flagErrors, include=FALSE}
+flag_input_errors <- function(df) {
+  error_flag <- with(df, 
+    (min > max) |
+    (mode > max) |
+    (min > mode) |
+    (min < naturalMin) |
+    (max > naturalMax)
+  )
+  return(error_flag)
+}
+
+responses_anon_short$error<-flag_input_errors(responses_anon_short)
+
+
+
+```
+
+```{r readjustLimits, include=FALSE}
+
+dat<-responses_anon_short%>%
+  left_join(defaultAnswers%>%
+      dplyr::select(question,alternative,naturalMin,naturalMax,X4pointLink))%>%
+  dplyr::filter(!error)
+
+
+### force Odds questions to be bounded to 1 if this was specified by participant on either side of the plausible limits
+dat<-dat%>%
+  dplyr::mutate(naturalMin=
+                  case_when(
+                    str_detect(question,"_cor") & min==1 ~ 1,
+                    TRUE~naturalMin),
+                naturalMax=
+                  case_when(
+                    str_detect(question,"_cor") & max==1 ~ 1,
+                    TRUE~naturalMax))
+
+dat<-dat%>%
+  dplyr::mutate(id=1:n())
+
+for(i in 1:nrow(dat)){
+  
+  if(dat$X4pointLink[i]!="identity"){
+  pertLoop<-solvePERT(Mode = dat$mode[i],
+            Min = dat$min[i],
+            Max = dat$max[i],
+            Conf = dat$confidence[i]/100,
+            Shape = 4,
+            naturalMax = dat$naturalMax[i],
+            naturalMin = dat$naturalMin[i],
+            link = dat$X4pointLink[i])
+  
+  dat$trueMin[i]<-pertLoop$trueMin
+  dat$trueMax[i]<-pertLoop$trueMax}
+  
+  if(i%%25 == 0){print(i)}
+}
+
+pertSolvedAnswers<-dat
+
+save(pertSolvedAnswers,file = "pertSolvedAnswers.RData")
+
+
+
+```
+
+```{r transform_functions, include=FALSE}
+# Extract unique question identifiers from the dataset
+questions <- unique(dat$question)
+
+# Identify questions that use probability-style scales (0-100), e.g., percentage-based
+prob_qs <- defaultAnswers %>%
+  filter(naturalMin == 0, naturalMax == 100) %>%
+  pull(question) %>%
+  unique()
+
+cor_qs <- defaultAnswers %>%
+  pull(question) %>%
+  unique()%>%
+  str_subset("_cor")
+
+# Define an identity function (returns input unchanged) for use later
+identity <- function(x) { x }
+
+# Initialize empty lists to store transformation functions
+pre_agg_transform_funs <- list()  # Applied *before* aggregation
+post_agg_transform_funs <- list() # Applied *after* aggregation
+
+# Define a special pre-aggregation transformation for a specific question
+# This transforms the year of foraging improvement into a difference from 2025
+pre_agg_transform_funs$foraging_improvement_year <- function(x) {
+  return(x - 2025)
+}
+
+# For all probability-based questions (e.g., 0–100 scales), define a transformation
+# that converts percentages into proportions (dividing by 100)
+for (n in prob_qs) {
+  pre_agg_transform_funs[[n]] <- function(x) { x / 100 }
+}
+
+for (n in cor_qs) {
+  pre_agg_transform_funs[[n]] <- log
+}
+
+# For all other questions not already assigned a pre-aggregation function,
+# assign the identity function (no transformation)
+for (n in questions[!questions %in% names(pre_agg_transform_funs)]) {
+  pre_agg_transform_funs[[n]] <- identity
+}
+
+# Similarly, assign the identity function to all post-aggregation functions by default
+for (n in questions[!questions %in% names(post_agg_transform_funs)]) {
+  post_agg_transform_funs[[n]] <- identity
+}
+
+# Load magrittr for the pipe (%>%) and compound assignment (%<>%) operators
+require(magrittr)
+
+# Create an empty dataframe to store transformed responses
+transf_responses <- data.frame()
+
+# Loop over each row of the original data
+for (i in 1:nrow(dat)) {
+  temp <- dat[i, ]         # Extract the row
+  q <- temp$question       # Get the question name
+  
+  # Apply the pre-aggregation transformation function for this question
+  # to all five key numeric fields (trueMin, min, mode, max, trueMax)
+  temp[, c("trueMin", "min", "mode", "max", "trueMax")] %<>% pre_agg_transform_funs[[q]]()
+  
+  # Append the transformed row to the results dataframe (with flexible binding)
+  transf_responses <- plyr::rbind.fill(transf_responses, temp)
+}
+
+
+```
+
+
+```{r aggregation, include=FALSE}
+
+# Assign the transformed responses to a new object for further use
+main_dat <- transf_responses
+
+# Add a unique row identifier (`id`) to each row
+main_dat <- main_dat %>%
+  dplyr::mutate(id = 1:n())
+
+# Initialize an empty list to store distribution definitions
+distr.list <- list()
+
+# Loop over each row of the transformed data
+for (i in 1:nrow(main_dat)) {
+  
+  temp <- main_dat[i, ]  # Extract current row
+  
+  # Flags to check the nature of the expert's estimate
+  full_certain <- temp$min == temp$max             # No uncertainty
+  all_zero <- temp$min == 0 & temp$max == 0        # Edge case: full certainty at zero
+  
+  # If expert provided a range (uncertain estimate)
+  if (!full_certain) {
+    
+    # Define a PERT distribution using min, mode, and max
+    # Assumes shape parameter = 4 (typical for a "moderately peaked" PERT)
+    dist.df <- data.frame(
+      min = temp$trueMin,
+      mode = temp$mode,
+      max = temp$trueMax,
+      shape = 4,
+      dist = "pert",
+      question = temp$question,
+      alternative = temp$alternative,
+      expert = temp$Alias
+    )
+    
+  } else {
+    # If the expert is fully certain about the estimate (min = max)
+    # Define a uniform distribution over a very narrow interval to simulate a point estimate
+    
+    dist.df <- data.frame(
+      min = ifelse(all_zero, temp$trueMin, temp$trueMin - 1e-3),
+      # mode is omitted for uniform
+      max = ifelse(all_zero, 1e-3, temp$trueMax),
+      # shape is also omitted
+      dist = "unif",  # Uniform distribution to represent fixed value with small uncertainty
+      question = temp$question,
+      alternative = temp$alternative,
+      expert = temp$Alias
+    )
+  }
+  
+  # Add the distribution definition to the list
+  distr.list[[i]] <- dist.df%>%
+    dplyr::mutate(id=i)
+}
+
+
+names(distr.list)<-main_dat$id
+distr.df<-plyr::rbind.fill(distr.list)%>%
+  dplyr::mutate(q_a=paste(question,alternative,sep="_"))
+
+distr.df%<>%
+  dplyr::filter(dist!="unif")
+### Aggregation through linear pooling
+
+
+linear_pool_pdf<-function(x,FUN,w=NULL){
+    
+  if(is.null(w)){w<-rep(1/length(FUN),length(FUN))}
+  
+  y<-numeric(length(x))
+  for(j in 1:length(FUN)){
+    y<-y+FUN[[j]](x)*w[j]  
+  }
+
+    return(y)
+    
+}
+
+linear_pool_qsample<-function(p,FUN,w=NULL){
+  
+  y<-matrix(0,nrow = length(FUN),ncol=length(p))  
+  
+  if(is.null(w)){w<-rep(1/length(FUN),length(FUN))}
+  
+  for(k in 1:length(FUN)){
+    y[k,]<-sapply(p,function(pp){FUN[[k]](pp)*w[k]})  
+  }
+  z<-colSums(y)
+  return(z)
+  
+}
+
+lpool_df_split<-split(distr.df,distr.df$q_a)
+
+density_functions<-
+linear_pool_ranges<-
+average_density_list<-
+cdf_function_list<-
+find_quantile_functions<-
+quantile_functions<-
+monte_carlo_quantiles<-
+distribution_functions<-
+pdf_lp<-list()
+
+
+for(i in seq_along(lpool_df_split)){
+# for(i in 14){
+  
+  temp<-lpool_df_split[[i]]
+  
+    # Create a list describing the distribution of each expert
+    L<-lapply(1:nrow(temp),function(j){
+      temp[j,]
+    })
+  
+  linear_pool_range<-c(min(temp$min),max(temp$max))
+  linear_pool_ranges[[i]]<-linear_pool_range
+  
+  density_functions[[i]]<-lapply(L,function(y){
+    if(y$dist=="unif"){resu<-function(x) dunif(x,min=y$min,max=y$max)}
+    if(y$dist=="pert"){resu<-function(x) dpert(x,min=y$min,mode = y$mode,max=y$max,shape=4)}
+    return(resu)
+  })
+  quantile_functions[[i]]<-lapply(L,function(y){
+    if(y$dist=="unif"){resu<-function(p) qunif(p,min=y$min,max=y$max)}
+    if(y$dist=="pert"){resu<-function(p) qpert(p,min=y$min,mode = y$mode,max=y$max,shape=4)}
+    return(resu)
+  })
+  distribution_functions[[i]]<-lapply(L,function(y){
+    if(y$dist=="unif"){resu<-function(q) punif(q,min=y$min,max=y$max)}
+    if(y$dist=="pert"){resu<-function(q) ppert(q,min=y$min,mode = y$mode,max=y$max,shape=4)}
+    return(resu)
+  })
+  x_values<-seq(from=linear_pool_range[1],to=linear_pool_range[2],length.out=1e4)
+  
+  average_density_list[[i]]<-function(x){
+    
+      densities <-  density_functions[[i]]
+      avg <- apply(sapply(densities, function(d) d(x)),1,mean)
+      return(avg)
+  }
+  
+  cdf_function_list[[i]]<-function(q, lower_bound = -Inf, upper_bound = q) {
+    z<-sapply(upper_bound,function(ub){integrate(average_density_list[[i]], lower_bound, ub,rel.tol = 1e-8, abs.tol = 1e-10)$value})
+    return(z)
+  }
+  
+  find_quantile_functions[[i]]<-function(q, lower_bound=-Inf, upper_bound=Inf, tol = 1e-6) {
+    
+    # Wrapper function to solve CDF(x) - q = 0
+    root_finder <- function(x) {
+      cdf_function_list[[i]](x, lower_bound) - q
+    }
+    
+    # Use uniroot to find the root
+    result <- uniroot(root_finder, lower = lower_bound, upper = upper_bound, tol = tol)
+    return(result$root)
+  }
+  
+  # Generate samples from the average density function
+  # monte_carlo_quantiles[[i]] <- function(q, n_samples = 1e6,lower=linear_pool_range[1],upper=linear_pool_range[2]) {
+  #   # Generate random samples uniformly in the range
+  #   x_samples <- sort(runif(n_samples, min=lower,max=upper))
+  #   
+  #   # Evaluate the average density at each sampled point
+  #   weights0 <- average_density_list[[i]](x_samples)
+  #   
+  #   # Normalize weights to create a valid PDF
+  #   weights <- weights0 / sum(weights0)
+  #   
+  #   # Compute the cumulative sum of weights (CDF approximation)
+  #   cdf <- cumsum(weights)
+  #   
+  #   # Find the value of x where CDF(x) = q
+  #   indexes <- sapply(q,function(qq){which(cdf >= qq)[1]})
+  #   return(x_samples[indexes])
+  # }
+  
+  monte_carlo_quantiles[[i]] <- local({
+    # Capture the dependencies for this iteration
+    density_funcs <- density_functions[[i]]
+    lower_bound <- linear_pool_ranges[[i]][1]
+    upper_bound <- linear_pool_ranges[[i]][2]
+
+    # Create the closure
+    function(q, n_samples = 1e6) {
+      require(mc2d)
+
+      # Generate random samples using Latin Hypercube Sampling
+      x_samples <- sort(lhs(nsv = n_samples, nsu = 1, min = lower_bound, max = upper_bound))
+
+      # Evaluate the average density at each sampled point
+      densities_matrix <- sapply(density_funcs, function(d) d(x_samples))
+      avg_densities <- rowMeans(densities_matrix)
+
+      # Normalize weights to create a valid PDF
+      weights <- avg_densities / sum(avg_densities)
+
+      # Compute the cumulative sum of weights (CDF approximation)
+      cdf <- cumsum(weights)
+
+      # Map quantiles `q` to sample values using the CDF
+      indexes <- sapply(q, function(qq) {
+        match_idx <- which(cdf >= qq)[1]
+        if (!is.na(match_idx)) match_idx else length(cdf)  # Handle edge case where `q` is beyond bounds
+      })
+
+      return(x_samples[indexes])
+    }
+  })
+
+  
+  pdf_values<-linear_pool_pdf(x=x_values,FUN = density_functions[[i]])
+
+  
+  pdf_lp[[i]]<-data.frame(PDF=pdf_values,
+                          values=x_values,
+                          q_a=unique(temp$q_a),
+                          alternative=unique(temp$alternative),
+                          question=unique(temp$question),
+                          dist="mixture")
+    
+  
+
+}
+
+
+names(pdf_lp)<-
+  names(quantile_functions)<-
+  names(find_quantile_functions)<-
+  names(monte_carlo_quantiles)<-
+  names(cdf_function_list)<-
+  names(density_functions)<-
+  names(linear_pool_ranges)<-
+  names(lpool_df_split)
+
+
+# monte_carlo_quantiles$trap_effect_gn_relative_to_live<-local({
+#     
+#     cdf_agg_fun<-function(a,b){a/b}
+#       
+#   
+#     # Capture the dependencies for this iteration
+#     density_funcs_gn <- density_functions$`trapping_Goodnature traps`
+#     density_funcs_lt <- density_functions$`trapping_Single capture live traps`
+#     lower_bound <- 0
+#     upper_bound <- 1
+# 
+#     # Create the closure
+#     function(q, n_samples = 1e6) {
+#       require(mc2d)
+# 
+#       # Generate random samples using Latin Hypercube Sampling
+#       x_samples <- sort(lhs(nsv = n_samples, nsu = 1, min = lower_bound, max = upper_bound))
+# 
+#       # Evaluate the average density at each sampled point
+#       densities_matrix_gn <- sapply(density_funcs_gn, function(d) d(x_samples))
+#       avg_densities_gn <- rowMeans(densities_matrix_gn)
+#       densities_matrix_lt <- sapply(density_funcs_lt, function(d) d(x_samples))
+#       avg_densities_lt <- rowMeans(densities_matrix_lt)
+#       # Normalize weights to create a valid PDF
+#       weights_gn <- avg_densities_gn / sum(avg_densities_gn)
+#       # Compute the cumulative sum of weights (CDF approximation)
+#       cdf_gn <- cumsum(weights_gn)
+# 
+#       # Normalize weights to create a valid PDF
+#       weights_lt <- avg_densities_lt / sum(avg_densities_lt)
+#       # Compute the cumulative sum of weights (CDF approximation)
+#       cdf_lt <- cumsum(weights_lt)   
+#       
+#       cdf<-cdf_agg_fun(cdf_gn/cdf_lt)
+#       
+#       # Map quantiles `q` to sample values using the CDF
+#       indexes <- sapply(q, function(qq) {
+#         match_idx <- which(cdf >= qq)[1]
+#         if (!is.na(match_idx)) match_idx else length(cdf)  # Handle edge case where `q` is beyond bounds
+#       })
+# 
+#       return(x_samples[indexes])
+#     }
+#   })
+  
+
+
+
+PDF_lp<-rbind.fill(pdf_lp)%>%
+  dplyr::mutate(agg_method="linear_pooling")
+
+
+### Aggregation through refitting
+
+samples<-priorSampling(split(distr.df,distr.df$id),size=1e4,seed=17,method="random")%>%
+  tidyr::pivot_longer(cols = as.character(distr.df$id))%>%
+  dplyr::rename(id=name)%>%
+  merge(main_dat%>%
+          dplyr::select(id,Alias,question,alternative),by="id")
+
+samples<-samples%>%
+  dplyr::mutate(q_a=paste(question,alternative,sep="_"))
+
+defaultAnswers<-defaultAnswers%>%
+    dplyr::mutate(q_a=paste(question,alternative,sep="_"))
+
+refitting<-TRUE
+
+if(refitting){
+  
+
+samples_split<-split(samples,samples$q_a)
+
+hist_list<-list()
+fitted_dist<-list()
+fitted_df_list<-list()
+
+for(i in seq_along(samples_split)){  
+  
+  q_aLoop<-names(samples_split)[i]
+  cat("\n")
+  cat(i)
+  cat("\n")
+  # hist_list[[i]]<-ggplot()+
+  # # Histogram as density
+  # geom_histogram(
+  #   data = samples_split[[i]],
+  #   aes(x = value, y = ..density.., fill = Alias),
+  #   position = "stack",
+  #   alpha = 0.4
+  #   # ,binwidth = bin_width
+  #   )+
+  #   labs(title=q_aLoop)
+  # 
+  dist<-defaultAnswers%>%
+    dplyr::filter(q_a==q_aLoop)%>%
+    pull(dist2fit)
+  
+fitted_dist[[i]] <- tryCatch(
+  {
+    # start_values<-case_when(
+      # dist=="beta"~list(shape1=5,shape2=5),
+      # dist=="gamma"~list(shape=2,rate=2),
+      # TRUE~list())
+    fitdist(data = samples_split[[i]]$value, distr = dist)
+    
+    
+  },
+  error = function(e) {
+    message("Error fitting distribution for index ", i, ": ", e$message)
+    NULL  # Return NULL or an alternative value in case of error
+  } 
+  
+  )
+
+if(!is.null(fitted_dist[[i]])){
+  
+  
+  fitted_df_list[[i]]<-as.data.frame(t(fitted_dist[[i]]$estimate))%>%
+    mutate(dist=dist,q_a=q_aLoop)
+  
+  
+}
+  
+}
+
+names(fitted_df_list)<-names(samples_split) 
+PDF_refit<-priorPDF(fitted_df_list)%>%
+  dplyr::mutate(pars=NULL,agg_method="refitting")%>%
+  dplyr::rename(q_a=par)%>%
+  merge(
+    defaultAnswers%>%
+      dplyr::select(question,alternative,q_a),
+    by="q_a"
+  )
+
+which(sapply(fitted_dist,is.null))
+
+PDF<-plyr::rbind.fill(PDF_refit,PDF_lp)
+}else{PDF<-PDF_lp}
+
+agg_info<-list(LP=
+                 list(quantile_functions=quantile_functions,
+                      mc_q_functions=monte_carlo_quantiles,
+                      density_functions=density_functions)
+               ,RF=list(fitted_dist=fitted_dist)
+               ,samples=samples
+               ,PDF=PDF
+               )
+
+
+save(agg_info,linear_pool_qsample,linear_pool_pdf,file=("./Data/Expert_Elicitation_Aggregation.RData"))
+
+
+
+```
+
+
+```{r aggregFigs}
+
+agg_plot<-list()
+
+for(i in seq_along(questions)){
+# for(i in 1){  
+  
+  samplesLoop<-agg_info$samples%>%
+    dplyr::filter(question==questions[i])%>%
+    merge(data.frame(agg_method=unique(PDF$agg_method)))
+  
+  PDFloop<-agg_info$PDF%>%
+    dplyr::filter(question==questions[i])
+  
+  alternatives<-unique(samplesLoop$alternative)
+  # if(length(alternatives)==)
+  if("gamma"%in%unique(PDFloop$dist)){
+  bin_width <- .33
+  isBeta<-FALSE
+  correcting<-1}
+  
+  if("beta"%in%unique(PDFloop$dist)){
+  bin_width <- 0.05
+  isBeta<-TRUE
+  correcting = 1}  
+
+    p<-ggplot(data=PDFloop)+
+    # Histogram as density
+    geom_histogram(
+      data = samplesLoop,
+      aes(x = value, y = ..density.., fill = Alias),
+      position = "stack",bins=100,
+      alpha = 0.4) +
+    # geom_line(data=scaled_pdf,aes(x=values,y=PDF_scaled))+
+    theme_bw()+
+    labs(y="PDF")
+    
+  p<-p+facet_grid(alternative~agg_method,scales = "free")
+  height<-width<-15
+
+# Build the ggplot object to extract the data
+plot_data <- ggplot_build(p)$data[[1]]
+
+facet_mapping <- ggplot_build(p)$layout$layout %>%
+  dplyr::select(PANEL, alternative, agg_method)
+
+stacked_max_points <- plot_data %>%
+  group_by(PANEL, x) %>% # Group by panel and x value (bin center)
+  summarise(total_density = sum(density), .groups = "drop") %>% # Sum densities for stacking
+  group_by(PANEL) %>% # Group by panel to find max per facet
+  summarise(
+    max_stacked_density = max(total_density),
+    x_at_max = x[which.max(total_density)]
+  )%>%
+  left_join(facet_mapping, by = "PANEL")
+
+  pdf_max <- PDFloop %>%
+  dplyr::group_by(alternative,agg_method) %>%
+  dplyr::summarize(pdf_max = max(PDF), .groups = "drop")
+
+    # Merge max values to calculate the scaling factor
+  scaling_factors <- pdf_max %>%
+    dplyr::left_join(stacked_max_points, by = c("alternative","agg_method")) %>%
+    dplyr::mutate(scale_factor = max_stacked_density / pdf_max)
+
+  # Join scaling factors with PDF data
+  scaled_pdf <- PDFloop %>%
+    dplyr::left_join(scaling_factors %>%
+                       dplyr::select(alternative,agg_method, scale_factor),
+                     by = c("alternative","agg_method")) %>%
+    dplyr::mutate(PDF_scaled = PDF * scale_factor * correcting)
+
+  p<-p+geom_line(data=scaled_pdf,aes(x=values,y=PDF_scaled))+
+  # p<-p+geom_line(data=PDFloop,aes(x=values,y=PDF))+
+    ggtitle(questions[i])
+
+  agg_plot[[i]]<-p
+  
+}
+
+names(agg_plot)<-questions
+
+lapply(names(agg_plot),function(n){
+  
+  gg<-agg_plot[[n]]
+  
+  ggsave(plot=gg,filename=paste0("aggregated_",n,".png"))
+  
+})
+
+
+```

@@ -4,6 +4,8 @@ NoAgeClasses<-3
 NoSubPops<-5
 
 StartN<-c(28,14,19,10,47)
+sum(StartN)
+
 
 SubPopK<-c(100,60,90,90,150)
 
@@ -94,20 +96,20 @@ colnames(mortality_mean) <- colnames(mortality_sd) <- c("A", "B", "C", "D", "E")
 
 
 # # Transpose the matrix to make sites rows
-mort_df <- as.data.frame(t(mortality_mean))
-mort_df$subpop <- rownames(mort_df)
-str(mort_df)
-# # Pivot longer and rename age classes
-mort_long <- mort_df %>%
-  pivot_longer(cols = c(m1, m2, mad), names_to = "age_class", values_to = "mortality") %>%
-  mutate(age = case_when(
-    age_class == "m1" ~ list(1),
-    age_class == "m2" ~ list(2),
-    age_class == "mad" ~ list(3:17)
-  )) %>%
-  unnest(age) %>%
-  mutate(survival=1-mortality)%>%
-  select(subpop, age, survival)
+# mort_df <- as.data.frame(t(mortality_mean))
+# mort_df$subpop <- rownames(mort_df)
+# str(mort_df)
+# # # Pivot longer and rename age classes
+# mort_long <- mort_df %>%
+#   pivot_longer(cols = c(m1, m2, mad), names_to = "age_class", values_to = "mortality") %>%
+#   mutate(age = case_when(
+#     age_class == "m1" ~ list(1),
+#     age_class == "m2" ~ list(2),
+#     age_class == "mad" ~ list(3:17)
+#   )) %>%
+#   unnest(age) %>%
+#   mutate(survival=1-mortality)%>%
+#   select(subpop, age, survival)
 
 # # mort_long-
 #   

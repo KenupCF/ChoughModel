@@ -33,9 +33,10 @@ init_population <- function(pars, seed=19) {
     existing_ids<-unique(pop$id)
   }
   
-  # Add time (t) and alive status columns
+  # Add time (t), alive, pair, and parental info
   pop <- pop %>%
-    dplyr::mutate(t = 0, alive = TRUE,pair=NA)
+    dplyr::mutate(t = 0, alive = TRUE, pair = NA, mother_id = NA, father_id = NA)
+  
   
   return(pop)
 }
@@ -79,7 +80,7 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
       alive ~ age +1,
       TRUE ~ age
     ))%>%
-    dplyr::select(id,subpop,sex,age,t,alive,pair)
+    tidy_pop_df()
     
   return(current)
 }
@@ -137,10 +138,7 @@ pairing <- function(pop, currentT, pars, seed=19) {
   
   # Prioritize newly formed pairs
   adults_new <- plyr::rbind.fill(pop, pairs) %>%
-    dplyr::arrange(desc(priority)) %>%
-    dplyr::filter(!duplicated(id, t)) %>%
-    dplyr::mutate(priority = NULL) %>%
-    dplyr::ungroup()
+    tidy_pop_df()
   
   return(adults_new)
 }
@@ -235,6 +233,18 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
   }) %>%
     unlist()
   
+  # Determine subpopulation for each offspring
+  motherIDs <- lapply(seq_along(reproducing$id), function(i) {
+    rep(reproducing$id[i], offspring[i])
+  }) %>%
+    unlist() 
+  
+  # Determine subpopulation for each offspring
+  fatherIDs <- lapply(seq_along(reproducing$id), function(i) {
+    rep(reproducing$pair[i], offspring[i])
+  }) %>%
+    unlist()  
+  
   # Assign sexes to offspring
   newSex <- c("F", "M")[rbinom(n = sum(offspring), size = 1, prob = pars$sex_ratio) + 1]
   
@@ -246,7 +256,9 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
     subpop = newSubpop,
     t = currentT,
     alive = TRUE,
-    pair = NA
+    pair = NA,
+    mother_id=motherIDs,
+    father_id=fatherIDs
   )}else{born<-data.frame()}
   
   # Append new offspring to existing population
@@ -255,45 +267,71 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
   return(newpop)
 }
 
-dispersal   <- function(pop, currentT,pars,seed=19){
+#----------------------------#
+# Function: dispersal        #
+#----------------------------#
+# Simulates the dispersal of individuals across subpopulations.
+# Only alive individuals at time `currentT` and in allowed dispersal ages can disperse.
+# Dispersal is based on a matrix of probabilities for moving between subpopulations.
+#
+# Args:
+#   pop: Population dataframe.
+#   currentT: Current time step.
+#   pars: A list containing:
+#     - dispersalMat: A square matrix of movement probabilities between subpops.
+#       Rows = origin subpop, Columns = destination subpop.
+#     - dispersalAges: Vector of ages at which dispersal is allowed.
+#   seed: Random seed for reproducibility.
+# Returns:
+#   Updated population dataframe with new subpopulation assignments for dispersers.
+dispersal <- function(pop, currentT, pars, seed = 19) {
   
-  needed_pars <- c("dispersalMat","dispersalAges")
+  # Check required parameters
+  needed_pars <- c("dispersalMat", "dispersalAges")
   par_names <- names(pars)
   missing_pars <- needed_pars[which(!needed_pars %in% par_names)]
   if(length(missing_pars) > 0){
-    stop(paste0("Error: Missing parameters are ", paste0(missing_pars, collapse=", ")))
+    stop(paste0("Error: Missing parameters are ", paste0(missing_pars, collapse = ", ")))
   }
   
-  pop<-pop%>%
-    dplyr::mutate(priority=0)
+  # Set default priority to 0 for everyone
+  pop <- pop %>%
+    dplyr::mutate(priority = 0)
   
-  subpops<-rownames(pars$dispersalMat)
+  # Identify all subpop labels
+  subpops <- rownames(pars$dispersalMat)
   
+  # Select eligible dispersers: alive, at current time, and within dispersal age class
+  dispersers <- pop %>%
+    dplyr::filter(alive, t == currentT, age %in% pars$dispersalAges) %>%
+    dplyr::mutate(priority = 1)
   
-  dispersers<-pop%>%
-    dplyr::filter(alive,t==currentT,age%in%pars$dispersalAges)%>%
-    dplyr::mutate(priority=1)
+  set.seed(seed)
   
-  if(nrow(dispersers)>0){
+  # If there are individuals eligible to disperse
+  if(nrow(dispersers) > 0) {
     
-    dispersal_destinations<-sapply(seq_along(dispersers$id),function(i){
-      
-      subpops[which(rmultinom(n = 1,prob=pars$dispersalMat[dispersers$subpop,],size = 1)[,1]==1)]
-      
+    # Sample destination subpopulation based on dispersal matrix
+    dispersal_destinations <- sapply(seq_along(dispersers$id), function(i) {
+      subpops[which(
+        rmultinom(n = 1, size = 1, 
+                  prob = pars$dispersalMat[dispersers$subpop[i], ])[, 1] == 1
+      )]
     })
     
-    dispersers$subpop<-dispersal_destinations
+    # Update subpopulation assignment for dispersers
+    dispersers$subpop <- dispersal_destinations
     
-    newpop<-plyr::rbind.fill(pop,dispersers)%>%
-      dplyr::arrange(desc(priority))%>%
-      dplyr::filter(!duplicated(id))%>%
-      dplyr::select(id,subpop,sex,age,t,alive,pair)
+    # Combine updated dispersers and original population
+    newpop <- plyr::rbind.fill(pop, dispersers) %>%
+      tidy_pop_df()
     
+  }else{
+    newpop<-pop
   }
   
-  
+  # Return updated population (with dispersal applied if needed)
   return(newpop)
-  
 }
 
 # Function to simulate zero-truncated Poisson
@@ -316,7 +354,8 @@ rtpois <- function(n, lambda,min=0,max=Inf) {
 #   max_tries: Maximum attempts to find unique IDs (default: 10 * n).
 # Returns:
 #   A character vector of `n` unique strings.
-generate_unique_ids <- function(n, existing = character(0), 
+generate_unique_ids <- function(n, existing = character(0),
+                                strlength = 8,
                                 charset = c(0:9, LETTERS), 
                                 max_tries = 10 * n) {
   unique_ids <- character(0)
@@ -324,7 +363,7 @@ generate_unique_ids <- function(n, existing = character(0),
   
   while (length(unique_ids) < n && tries < max_tries) {
     needed <- n - length(unique_ids)
-    candidates <- replicate(needed, paste0(sample(charset, 8, replace = TRUE), collapse = ""))
+    candidates <- replicate(needed, paste0(sample(charset, strlength, replace = TRUE), collapse = ""))
     # Filter out existing and duplicate values
     new_ids <- setdiff(candidates, c(existing, unique_ids))
     unique_ids <- unique(c(unique_ids, new_ids))
@@ -337,3 +376,58 @@ generate_unique_ids <- function(n, existing = character(0),
   
   return(unique_ids)
 }
+
+
+
+tidy_pop_df <- function(df){
+  
+  if(is.null(df$priority)){df$priority<-0}
+  
+  resu<-df%>%
+  dplyr::arrange(desc(priority)) %>%           # Prioritize updates
+    dplyr::filter(!duplicated(data.frame(id,t))) %>%           # Keep only one entry per individual
+    dplyr::select(id, subpop, sex, age, t, alive, pair,mother_id,father_id)
+  
+  return(resu)
+}
+
+
+# Wrapper function to calculate inbreeding coefficients from population dataframe
+calculate_inbreeding <- function(pop, initial_inb = NULL) {
+  require(kinship2)
+  require(dplyr)
+  
+  # Check if required pedigree columns exist
+  if(!all(c("id", "sex", "mother_id", "father_id") %in% names(pop))){
+    stop("Population must contain 'id', 'sex', 'mother_id', and 'father_id' columns.")
+  }
+  
+  # Map sex to numeric codes (1 = male, 2 = female) as required by kinship2
+  pop <- pop %>%
+    mutate(sex_code = ifelse(sex == "M", 1, ifelse(sex == "F", 2, NA)))
+  
+  # Create pedigree object
+  ped <- with(pop, pedigree(id = id, dadid = father_id, momid = mother_id, sex = sex_code))
+  
+  # Compute kinship matrix
+  K <- kinship(ped)
+  
+  # Inbreeding coefficient F = 2 * kinship(self, self)
+  inb <- diag(K) * 2
+  
+  # Store as named vector
+  inb_vec <- tibble(id = names(inb), F = inb)
+  
+  # Join back into population dataframe
+  pop <- pop %>%
+    left_join(inb_vec, by = "id")
+  
+  # Override with known founder inbreeding if provided
+  if(!is.null(initial_inb)) {
+    matched_ids <- intersect(names(initial_inb), pop$id)
+    pop$F[match(matched_ids, pop$id)] <- initial_inb[matched_ids]
+  }
+  
+  return(pop)
+}
+
