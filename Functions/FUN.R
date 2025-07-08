@@ -35,7 +35,7 @@ init_population <- function(pars, seed=19) {
   
   # Add time (t), alive, pair, and parental info
   pop <- pop %>%
-    dplyr::mutate(t = 0, alive = TRUE, pair = NA, mother_id = NA, father_id = NA)
+    dplyr::mutate(t = 0, alive = TRUE, pair = NA, mother_id = NA, father_id = NA,tsr=NA) #tsr = time since release (years)
   
   
   return(pop)
@@ -72,7 +72,9 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
   current$alive <- alive_vec
   
   current<-current%>%
-    dplyr::mutate(pair=case_when(
+    dplyr::mutate(
+      tsr=tsr+1,
+      pair=case_when(
       !alive ~ NA,
       TRUE ~ pair
     ),
