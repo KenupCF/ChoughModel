@@ -35,7 +35,9 @@ init_population <- function(pars, seed=19) {
   
   # Add time (t), alive, pair, and parental info
   pop <- pop %>%
-    dplyr::mutate(t = 0, alive = TRUE, pair = NA, mother_id = NA, father_id = NA,tsr=NA) #tsr = time since release (years)
+    dplyr::mutate(t = 0, alive = TRUE, pair = NA, mother_id = NA, father_id = NA,
+                  origin="Wild",release_strat=NA,habituation=NA,release_time = NA,age_release=NA,
+                  tsr=NA) #tsr = time since release (years)
   
   
   return(pop)
@@ -45,7 +47,7 @@ init_population <- function(pars, seed=19) {
 mortality_aging <- function(pop, currentT, pars,seed=19) {
   
   # Check that required mortality parameter is provided
-  needed_pars <- c("phi_df","max_age")
+  needed_pars <- c("phi_df","max_age","improved_foraging")
   par_names <- names(pars)
   missing_pars <- needed_pars[which(!needed_pars %in% par_names)]
   if(length(missing_pars) > 0){
@@ -58,7 +60,12 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
     dplyr::left_join(pars$phi_df)
   
   # Assign constant survival probability
-  surv <- current$survival
+  surv <- inv.logit(current$Beta0 + 
+                    # current$Beta_sf * current$sfee +
+                    current$Beta_if * pars$improved_foraging +
+                    # current$Beta_b * current$sfee * current$ifor 
+                    + 0)%>%
+    adjust_probability(current$OR_release)
   
   set.seed(seed)
   # Simulate survival for each individual using Bernoulli trial
@@ -220,8 +227,24 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
     dplyr::left_join(pars$nesting_success_df)
     
     
-  prob_nest_sucess <- reproducing$p_nest_success
-  brood_size <- rep(pars$av_brood_size, nrow(reproducing))
+  prob_nest_sucess <- inv.logit(reproducing$B0+
+                                  # reproducing$Beta_sf * sfee+
+                                  # reproducing$Beta_if * ifor+
+                                  # reproducing$Beta_b * seff * ifor + 
+                                  0)
+  
+  reproducing<-tidy_pop_df(reproducing)%>%
+    left_join(pars$brood_size_df)
+  
+  
+  brood_size <- exp(reproducing$B0+
+                            # reproducing$Beta_sf * sfee +
+                            # reproducing$Beta_if * ifor +
+                            # reproducing$Beta_b * seff * ifor + 
+                            0)%>%
+    pmax(0)%>%
+    pmin(pars$max_brood_size)%>%
+    identity()
   
   # Simulate number of offspring per reproducing female
   offspring <- sapply(seq_along(reproducing$id), function(i) {
@@ -388,11 +411,10 @@ tidy_pop_df <- function(df){
   resu<-df%>%
   dplyr::arrange(desc(priority)) %>%           # Prioritize updates
     dplyr::filter(!duplicated(data.frame(id,t))) %>%           # Keep only one entry per individual
-    dplyr::select(id, subpop, sex, age, t, alive, pair,mother_id,father_id)
+    dplyr::select(id, subpop, sex, age, t, alive, pair,mother_id,father_id,origin,age_release,release_strat,release_time,habituation,tsr)
   
   return(resu)
 }
-
 
 # Wrapper function to calculate inbreeding coefficients from population dataframe
 calculate_inbreeding <- function(pop, initial_inb = NULL) {
@@ -432,4 +454,43 @@ calculate_inbreeding <- function(pop, initial_inb = NULL) {
   
   return(pop)
 }
+
+
+
+
+adjust_probability <- function(prob, odds_ratio) {
+  if (any(prob <= 0) || any(prob >= 1)) {
+    stop("Probability must be between 0 and 1 (exclusive).")
+  }
+  if (any(odds_ratio <= 0)) {
+    stop("Odds ratio must be greater than 0.")
+  }
+  
+  odds <- prob / (1 - prob)
+  adjusted_odds <- odds * odds_ratio
+  adjusted_prob <- adjusted_odds / (1 + adjusted_odds)
+  
+  return(adjusted_prob)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

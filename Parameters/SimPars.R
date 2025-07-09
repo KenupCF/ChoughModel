@@ -13,3 +13,7 @@ if(model_pars$sim$parametric_uncertainty){
   qrunif_template<-data.frame(min=0.5,max=0.5,dist="unif")
 }
 
+
+
+qFUN <- agg_info$LP$mc_q_functions 
+

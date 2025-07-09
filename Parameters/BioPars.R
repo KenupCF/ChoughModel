@@ -1,4 +1,7 @@
 
+
+model_pars$bio$inherent<-list()
+
 NoAgeClasses<-3
 
 NoSubPops<-5
@@ -23,7 +26,6 @@ rownames(dispersalMat) <- colnames(dispersalMat) <- c("A", "B", "C", "D", "E")
 cor_env_repro_surv <- 0
 cor_env_among_pops <- 1
 
-brood_failures_pct <- c(A = 35, B = 35, C = 32, D = 40, E = 45)
 
 ## Temporary mock demographic parameters
 surv<-.75
@@ -46,23 +48,18 @@ names(p_nest_success) <- rownames(dispersalMat)
 nest_success_df <- as.data.frame(p_nest_success)
 nest_success_df$subpop <- rownames(nest_success_df)
 
-
-brood_size_mean <- c(2.6, 2.8, 2.9, 2.5, 2.6)
-  
-brood_size_sd <- c(0.9, 1.3, 1.0, 1.1, 1.2)
-
-
-
-age_firt_breed <- 3
-age_last_breed <-	17
-max_age <-	17
-max_brood_p_year <-	1
-max_prog_per_brood <- 5
-sex_ratio <-	0.5
-prop_fem_breed<-1
-prop_mal_breed<-1
+model_pars$bio$inherent$age_first_breed <- 3
+model_pars$bio$inherent$age_last_breed <-	17
+model_pars$bio$inherent$max_age <-	17
+model_pars$bio$inherent$max_brood_p_year <-	1
+model_pars$bio$inherent$max_prog_per_brood <- 5
+model_pars$bio$inherent$sex_ratio <-	0.5
+model_pars$bio$inherent$prop_fem_breed<-1
+model_pars$bio$inherent$prop_mal_breed<-1
 
 
+#### Mortality handling
+{
 # Mean values matrix
 mortality_mean <- matrix(
   c(
@@ -77,8 +74,6 @@ mortality_mean <- matrix(
 mortality_mean[-1,]<-mortality_mean[-1,]/100
 mortality_mean[1,]<-1-mortality_mean[1,]
 
-
-
 # Standard deviation matrix
 mortality_sd <- matrix(
   c(
@@ -89,6 +84,7 @@ mortality_sd <- matrix(
   nrow = 3,
   byrow = TRUE
 )
+mortality_sd[-1,]<-mortality_sd[-1,]/100
 
 # Set row and column names
 rownames(mortality_mean) <- rownames(mortality_sd) <- c("m1", "m2", "mad")
@@ -96,24 +92,129 @@ colnames(mortality_mean) <- colnames(mortality_sd) <- c("A", "B", "C", "D", "E")
 
 
 # # Transpose the matrix to make sites rows
-# mort_df <- as.data.frame(t(mortality_mean))
-# mort_df$subpop <- rownames(mort_df)
-# str(mort_df)
-# # # Pivot longer and rename age classes
-# mort_long <- mort_df %>%
-#   pivot_longer(cols = c(m1, m2, mad), names_to = "age_class", values_to = "mortality") %>%
-#   mutate(age = case_when(
-#     age_class == "m1" ~ list(1),
-#     age_class == "m2" ~ list(2),
-#     age_class == "mad" ~ list(3:17)
-#   )) %>%
-#   unnest(age) %>%
-#   mutate(survival=1-mortality)%>%
-#   select(subpop, age, survival)
+mort_df <- as.data.frame(t(mortality_mean))
+mort_df$subpop <- rownames(mort_df)
 
-# # mort_long-
-#   
-#   
-# 
-# 
-# 
+# # Transpose the matrix to make sites rows
+mort_sd_df <- as.data.frame(t(mortality_sd))
+mort_sd_df$subpop <- rownames(mort_sd_df)
+
+# Step 1: pivot to long format
+mort_long <- mort_df %>%
+  pivot_longer(cols = starts_with("m"), 
+               names_to = "age_class_raw", 
+               values_to = "mortality")
+
+# Step 2: create proper age_class label
+mort_long <- mort_long %>%
+  mutate(age_class = recode(age_class_raw,
+                            "m1" = "1",
+                            "m2" = "2",
+                            "mad" = "ad")) %>%
+  select(subpop, age_class, mortality)
+
+# Step 1: pivot to long format
+mort_long_sd <- mort_sd_df %>%
+  pivot_longer(cols = starts_with("m"), 
+               names_to = "age_class_raw", 
+               values_to = "mortality_sd")
+
+# Step 2: create proper age_class label
+mort_long_sd <- mort_long_sd %>%
+  mutate(age_class = recode(age_class_raw,
+                            "m1" = "1",
+                            "m2" = "2",
+                            "mad" = "ad")) %>%
+  select(subpop, age_class, mortality_sd)
+
+
+mort_long<-left_join(mort_long,mort_long_sd)%>%
+  dplyr::mutate(survival=1-mortality)%>%
+  dplyr::mutate(mortality_logit = logit(mortality),
+                mortality_logit_sd = ((1 / (mortality * (1 - mortality)))^2)*(mortality_sd^2))%>%
+  dplyr::mutate(mean=mortality_logit,sd=mortality_logit_sd,par=paste(subpop,age_class,sep="_"),dist="norm")%>%
+  dplyr::mutate(mean=-mean)%>%
+  dplyr::select(mean,sd,dist,par)
+
+### create distribution descriptions for each age class / subpopulation
+dists<-split(mort_long,mort_long$par)
+names(dists)<-paste("surv",mort_long$par)
+
+for(d in seq_along(dists)) {
+  
+  # Force local evaluation of mean and sd
+  dist_mean <- dists[[d]]$mean
+  dist_sd <- dists[[d]]$sd
+  dist_name <- names(dists)[d]
+  
+  qFUN[[dist_name]] <- local({
+    m <- dist_mean
+    s <- dist_sd
+    function(x) {
+      qnorm(p = x, mean = m, sd = s)
+    }
+  })
+  
+}
+}
+
+#### Nesting success handling
+{
+  model_pars$bio$nest_succ_df<-data.frame(B0=logit(p_nest_success),
+                                          subpop=names(p_nest_success))
+}
+
+#### Brood size handling
+{
+# Define subpop labels
+subpops <- LETTERS[1:5]
+
+brood_size_mean <- c(2.6, 2.8, 2.9, 2.5, 2.6)
+
+brood_size_sd <- c(0.9, 1.3, 1.0, 1.1, 1.2)
+
+# Step 1: Create mean and SD data frames
+brood_df <- data.frame(
+  subpop = subpops,
+  mean = brood_size_mean,
+  sd = brood_size_sd
+)
+
+# Step 2: Convert to log-normal distribution parameters using the delta method
+# For log-normal: log(mean^2 / sqrt(sd^2 + mean^2)) and sqrt(log(1 + (sd^2 / mean^2)))
+brood_df <- brood_df %>%
+  mutate(
+    # meanlog = log(mean^2 / sqrt(sd^2 + mean^2)),
+    # sdlog = sqrt(log(1 + (sd^2 / mean^2))),
+    par = paste0("brood_", subpop),
+    dist = "norm"
+  ) %>%
+  select(mean, sd, dist, par)
+
+# Step 3: Create named list of distribution rows
+brood_dists <- split(brood_df, brood_df$par)
+
+# Step 4: Add quantile functions to qFUN
+for (d in seq_along(brood_dists)) {
+  
+  # Force local evaluation of mean and sd
+  dist_mean <- brood_dists[[d]]$mean
+  dist_sd <- brood_dists[[d]]$sd
+  dist_name <- names(brood_dists)[d]
+  
+  qFUN[[dist_name]] <- local({
+    m <- dist_mean
+    s <- dist_sd
+    function(x) {
+      qnorm(p = x, mean = m, sd = s)
+    }
+  })
+}
+}
+
+
+
+
+
+
+
