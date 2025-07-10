@@ -1,5 +1,4 @@
 
-load("./Data/Expert_Elicitation_Aggregation.RData")
 
 
 model_pars$priors$Q_nest_abandonment<-qrunif_template

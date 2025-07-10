@@ -10,7 +10,7 @@ model_pars$sim$n_samples_quantile_function<-1e4
 if(model_pars$sim$parametric_uncertainty){
   qrunif_template<-data.frame(min=0.0,max=1.0,dist="unif")
 }else{
-  qrunif_template<-data.frame(min=0.5,max=0.5,dist="unif")
+  qrunif_template<-data.frame(min=0.99,max=0.99,dist="unif")
 }
 
 

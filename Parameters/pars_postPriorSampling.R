@@ -89,20 +89,20 @@ model_pars$bio$surv_coeff <-
     )
   )%>%
   merge(data.frame(origin=c("Wild","Captive")))%>%
-  merge(data.frame(release_strat=c(NA,"Staged","Immediate")))%>%
+  merge(data.frame(release_meth=c(NA,"Staged","Immediate")))%>%
   merge(data.frame(release_time=c(NA,"Summer","Winter")))%>%
   merge(data.frame(habituation=c(NA,0,1)))%>%
   merge(data.frame(age_release=c(NA,1:model_pars$bio$inherent$max_age)))%>%
-  # dplyr::filter(! (age_release==1 & (habituation==0 | release_strat=="Immediate")) )%>%
+  # dplyr::filter(! (age_release==1 & (habituation==0 | release_meth=="Immediate")) )%>%
   dplyr::mutate(Beta0=case_when(
-    age_release==1 & age==1 & origin == "Wild"    & release_time == "Summer" & habituation == 1 & release_strat == "Staged"~prior_rng$pr_fst_yr_survival_w_h_summer[i]^smr_adj,
-    age_release==1 & age==1 & origin == "Wild"    & release_time == "Winter" & habituation == 1 & release_strat == "Staged"~prior_rng$pr_fst_yr_survival_w_h_winter[i]^wtr_adj,
-    age_release==1 & age==1 & origin == "Captive" & release_time == "Summer" & habituation == 1 & release_strat == "Staged"~prior_rng$pr_fst_yr_survival_c_h_summer[i]^smr_adj,
-    age_release==1 & age==1 & origin == "Captive" & release_time == "Winter" & habituation == 1 & release_strat == "Staged"~prior_rng$pr_fst_yr_survival_c_h_winter[i]^wtr_adj,
+    age_release==1 & age==1 & origin == "Wild"    & release_time == "Summer" & habituation == 1 & release_meth == "Staged"~prior_rng$pr_fst_yr_survival_w_h_summer[i]^smr_adj,
+    age_release==1 & age==1 & origin == "Wild"    & release_time == "Winter" & habituation == 1 & release_meth == "Staged"~prior_rng$pr_fst_yr_survival_w_h_winter[i]^wtr_adj,
+    age_release==1 & age==1 & origin == "Captive" & release_time == "Summer" & habituation == 1 & release_meth == "Staged"~prior_rng$pr_fst_yr_survival_c_h_summer[i]^smr_adj,
+    age_release==1 & age==1 & origin == "Captive" & release_time == "Winter" & habituation == 1 & release_meth == "Staged"~prior_rng$pr_fst_yr_survival_c_h_winter[i]^wtr_adj,
     TRUE~Beta0
   ))%>%
   dplyr::mutate(Beta_sf=case_when(
-    age_release==1 & age==1 & !is.na(release_time) & !is.na(habituation) & !is.na(release_strat)~0,
+    age_release==1 & age==1 & !is.na(release_time) & !is.na(habituation) & !is.na(release_meth)~0,
     TRUE~Beta_sf
   ))
 
@@ -116,7 +116,7 @@ or_df<-plyr::rbind.fill(
     habituation=c(0,1,0,1),
     origin=c("Captive","Captive","Wild","Wild"),
     age_release=2,
-    release_strat="Staged",
+    release_meth="Staged",
     release_time="Winter"),
   data.frame(OR_release=1/exp(
     c(prior_rng$logcor_ad_c_st_h[i],
@@ -125,7 +125,7 @@ or_df<-plyr::rbind.fill(
     habituation=c(0,1,0),
     origin=c("Captive","Captive","Wild"),
     # age_release=2,
-    release_strat=c("Staged","Staged","Immediate"),
+    release_meth=c("Staged","Staged","Immediate"),
     release_time="Winter")%>%
     merge(data.frame(
       age_release = model_pars$bio$inherent$age_first_breed:model_pars$bio$inherent$max_age
@@ -170,17 +170,23 @@ model_pars$mgmt$acc_period_df<-rbind.fill(
              habituation=c(0,1,0,1),
              origin=c("Captive","Captive","Wild","Wild"),
              age_release=2,
-             release_strat="Staged",
+             release_meth="Staged",
              release_time="Winter"),
   data.frame(acc_period=c(prior_rng$acc_period_ad_c_st_h[i],
                           prior_rng$acc_period_ad_c_st_nh[i],
                           prior_rng$acc_period_ad_w_im_nh[i]),
              habituation=c(0,1,0),
              origin=c("Captive","Captive","Wild"),
-             release_strat=c("Staged","Staged","Immediate"),
+             release_meth=c("Staged","Staged","Immediate"),
              release_time="Winter")%>%
     merge(data.frame(age_release = model_pars$bio$inherent$age_first_breed:model_pars$bio$inherent$max_age)))
-  
+
+
+model_pars$mgmt$transp_fl_OR<-exp(prior_rng$logcor_egg_fledg[i])
+
+model_pars$mgmt$prob_nest_aband<-prior_rng$prob_nest_aband[i]
+
+
 model_pars$mgmt$prob_for_imp <- prior_rng$prob_imp_for[i] 
 model_pars$mgmt$year_for_imp <- prior_rng$year_imp_for[i] 
 

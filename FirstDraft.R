@@ -1,3 +1,5 @@
+require(gtools)
+require(stringr)
 require(plyr)
 require(dplyr)
 require(tidyr)
@@ -40,8 +42,17 @@ pars<-list(StartN=rep(10,5),
 prior_rng<-priorSampling(model_pars$priors,
                          seed = 26051991,
                          # size=2)%>%
-                         size=model_pars$sim$n_iter)
+                         size=model_pars$sim$n_iter)%>%
+  dplyr::mutate(p = 1:n())
 source("./Parameters/priorHandling.R")
+
+mgmt_options<-expand.grid(SuppFeed=c("No","Current","Provisional"),ReleaseStrat=rel_strats$r)%>%
+  dplyr::mutate(a=1:n())
+
+prior_rng<-merge(prior_rng,mgmt_options)%>%
+  dplyr::arrange(p,a)%>%
+  dplyr::mutate(i=1:n())
+
 
 init_pop<-init_population(pars)
 init_pop<-pairing(pop=init_pop,currentT = 0,pars=pars)
@@ -51,7 +62,9 @@ pop<-init_pop
 i<-1
 source("./Parameters/pars_postPriorSampling.R")
 
-start_conditions<-list(init_pop=pop)  
+start_conditions<-list(init_pop=pop)
+model_pars$mgmt$supp_feeding_df<-model_pars$mgmt$supp_feeding_master[[prior_rng$SuppFeed[i]]]
+
   
 ### wrap this into a model function  
   

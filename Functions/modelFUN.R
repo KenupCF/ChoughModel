@@ -2,28 +2,52 @@ run_model<-function(start_conditions,model_pars){
   
   n_years<-model_pars$sim$n_years
   
-  pop<-start_conditions$init_pop
   
   pars<-list()
+  
+  pars$all_ids<-unique(pop$id)
+  
   pars$max_age<-model_pars$bio$inherent$max_age
   pars$breeding_age<-model_pars$bio$inherent$age_first_breed
   pars$sex_ratio<-model_pars$bio$inherent$sex_ratio
   pars$max_brood_size<-model_pars$bio$inherent$max_prog_per_brood
-  pars$all_ids<-unique(pop$id)
+  pars$av_clutch_size<-model_pars$bio$inherent$av_clutch_size
+  
+  pars$supp_feed_df<-model_pars$mgmt$supp_feeding_df
+  
+  pars$acc_period_df<-model_pars$mgmt$acc_period_df
+  pars$release_year_cont<-model_pars$mgmt$release_year_cont
+  
+  pars$eggs_replaced_fem_ids<-character()
+  pars$prob_nest_aband<-model_pars$mgmt$prob_nest_aband
+  pars$transp_fl_OR<-model_pars$mgmt$transp_fl_OR
+  pars$no_eggs_replaced<-NA
+  
+  
   
   pars$phi_df<-model_pars$bio$surv_coeff
   pars$nesting_success_df<-model_pars$bio$nest_succ_coeff
   pars$brood_size_df<-model_pars$bio$brood_size_coeff
   
+  
+  pars$dispersalMat<-model_pars$bio$dispersalMat
+  pars$dispersalAges<-2:model_pars$bio$inherent$max_age
+  
   year_imp_for<-model_pars$mgmt$year_for_imp
   bin_imp_for<-rbinom(n = 1,size = 1,prob = model_pars$mgmt$prob_for_imp)
-  pars$improved_foraging<-0
+  
+  
   if(bin_imp_for==0){year_imp_for<-Inf}
   
+  pars$improved_foraging<-pmin(1,pmax(0,(1:n_years)-year_imp_for+1))
+  
+  
+  pop<-start_conditions$init_pop
+  
+  suppressMessages({
+    
   for(j in 1:n_years){
-    
-    pars$improved_foraging<-pmin(1,pmax(0,j-year_imp_for+1))
-    
+
     pars$all_ids<-unique(pop$id)
     
     currentPop0<-pop%>%
@@ -36,13 +60,15 @@ run_model<-function(start_conditions,model_pars){
     
     currentPop3<-pairing(pop=currentPop2,currentT = j,pars=pars)
     
-    currentPop4<-recruitment(pop=currentPop3,currentT = j,pars=pars)
+    currentPop4<-dispersal(pop=currentPop3,currentT = j,pars=pars)
     
-    currentPop5<-dispersal(pop=currentPop4,currentT = j,pars=pars)
+    born<-recruitment(pop=currentPop4,currentT = j,pars=pars)
     
     
-    pop<-plyr::rbind.fill(pop,currentPop5)
+    pop<-plyr::rbind.fill(pop,currentPop4,born)%>%
+      tidy_pop_df()
     
   }
+  })
   
 }

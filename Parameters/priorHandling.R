@@ -147,3 +147,6 @@ prior_rng$logcor_sad_c_st_nh     <- qFUN$`subadult_pr_survival_cor_Captive-St-NH
 
 # Egg-to-fledgling success correction
 prior_rng$logcor_egg_fledg       <- qFUN$`egg_fl_prob_cor_Implanted eggs fledging odds`(prior_rng$Q_surv_cor, n_samples = n_samples_mc)
+
+
+prior_rng$prob_nest_aband        <- qFUN$`nest_aband_prob_Nest abandonment`(q = prior_rng$Q_nest_abandonment,n_samples = n_samples_mc)

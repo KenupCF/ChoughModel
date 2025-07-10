@@ -35,9 +35,11 @@ init_population <- function(pars, seed=19) {
   
   # Add time (t), alive, pair, and parental info
   pop <- pop %>%
-    dplyr::mutate(t = 0, alive = TRUE, pair = NA, mother_id = NA, father_id = NA,
-                  origin="Wild",release_strat=NA,habituation=NA,release_time = NA,age_release=NA,
-                  tsr=NA) #tsr = time since release (years)
+    dplyr::mutate(t = 0, alive = TRUE, 
+                  pair = NA_character_, mother_id = NA_character_, father_id = NA_character_,
+                  origin="Wild",
+                  release_meth=NA_character_,habituation=NA,release_time = NA_character_,
+                  age_release=NA,tsr=NA) #tsr = time since release (years)
   
   
   return(pop)
@@ -47,7 +49,7 @@ init_population <- function(pars, seed=19) {
 mortality_aging <- function(pop, currentT, pars,seed=19) {
   
   # Check that required mortality parameter is provided
-  needed_pars <- c("phi_df","max_age","improved_foraging")
+  needed_pars <- c("phi_df","max_age","improved_foraging","acc_period_df","release_year_cont","supp_feeding_df")
   par_names <- names(pars)
   missing_pars <- needed_pars[which(!needed_pars %in% par_names)]
   if(length(missing_pars) > 0){
@@ -55,17 +57,44 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
   }
   
   # Filter population for individuals at the current time step
+  
   current <- pop %>%
-    dplyr::filter(t == currentT)%>%
-    dplyr::left_join(pars$phi_df)
+    dplyr::filter(t == currentT,alive)
+  
+  # current$habituation[1]<-1
+  # current$release_meth[1]<-"Staged"
+  # current$release_time[1]<-"Winter"
+  # current$age_release[1]<-current$age[1]
+  # current$origin[1]<-"Captive"
+  # current$tsr[1]<-.5
+  
+  current<-current%>%
+    
+    dplyr::left_join(pars$phi_df)%>%
+    dplyr::left_join(pars$acc_period_df)%>%
+    dplyr::left_join(pars$release_year_cont)%>%
+    dplyr::left_join(pars$supp_feeding_df)%>%
+    
+    dplyr::mutate(yr_duration=case_when(
+      tsr>0~1,
+      TRUE~yr_duration
+    ))%>%
+    dplyr::group_by(id)%>%
+    dplyr::mutate(prop_year_acc=min(acc_period-tsr,yr_duration)/yr_duration)
   
   # Assign constant survival probability
-  surv <- inv.logit(current$Beta0 + 
-                    # current$Beta_sf * current$sfee +
-                    current$Beta_if * pars$improved_foraging +
-                    # current$Beta_b * current$sfee * current$ifor 
-                    + 0)%>%
-    adjust_probability(current$OR_release)
+  surv <- (
+          ### Calculate survival based on habitat conditions
+          inv.logit(current$Beta0 + 
+                    current$Beta_sf * current$sf +
+                    current$Beta_if * pars$improved_foraging[currentT] +
+                    current$Beta_b  * current$sf * pars$improved_foraging[currentT]
+                    + 0)
+          #### Adjust by how much of the year individual spent in the wild
+           ^ current$yr_duration)%>%
+    ### adjust probability of surviving using odds-ratio, given the proportion of the period individual was under acclimation    
+    adjust_probability(current$OR_release,prop=current$prop_year_acc)
+    # adjust_probability(current$OR_release,prop=.75)
   
   set.seed(seed)
   # Simulate survival for each individual using Bernoulli trial
@@ -80,11 +109,15 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
   
   current<-current%>%
     dplyr::mutate(
-      tsr=tsr+1,
+      ## time since release
+      tsr=case_when(tsr==0~tsr+yr_duration, # if 0, add the year duration from release to "new year"
+                    TRUE~tsr+1), # if bigger than 0, add a full year
+      
       pair=case_when(
       !alive ~ NA,
       TRUE ~ pair
     ),
+    
     age=case_when(
       alive ~ age +1,
       TRUE ~ age
@@ -120,7 +153,8 @@ pairing <- function(pop, currentT, pars, seed=19) {
     dplyr::mutate(priority = 0)
   
   adults <- pop %>%
-    filter(alive, t == currentT, age >= pars$breeding_age)
+    filter(alive, t == currentT, age >= pars$breeding_age)%>%
+    dplyr::ungroup()
   
   pairs <- data.frame()
   subpops <- unique(adults$subpop)
@@ -201,10 +235,15 @@ unpair_if_dead <- function(pop, currentT) {
 recruitment <- function(pop, currentT, pars, seed = 19) {
   
   # Ensure required parameters are present
-  needed_pars <- c("breeding_age", "nesting_success_df", "av_brood_size", 
-                   "sex_ratio", "max_brood_size", "all_ids")
+  needed_pars <- c("breeding_age","av_clutch_size","sex_ratio", "max_brood_size", 
+                   "nesting_success_df", "brood_size_df", ,"supp_feeding_df","improved_foraging",
+                   "transp_fl_OR","eggs_replaced_fem_ids","no_eggs_replaced","prob_nest_aband",
+                   "all_ids")
+  
   par_names <- names(pars)
+  
   missing_pars <- needed_pars[which(!needed_pars %in% par_names)]
+  
   if(length(missing_pars) > 0){
     stop(paste0("Error: Missing parameters are ", paste0(missing_pars, collapse = ", ")))
   }
@@ -215,42 +254,62 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
                   !is.na(pair),
                   alive,
                   t == currentT,
-                  age >= pars$breeding_age)
-  
+                  age >= pars$breeding_age)%>%
+    dplyr::mutate(egg_swapped=case_when(id%in%pars$eggs_replaced_fem_ids~TRUE,
+                                        TRUE~FALSE))%>%
+    dplyr::left_join(pars$supp_feeding_df)
+    
   if(nrow(reproducing)>0){
+    
+  # reproducing$egg_swapped[1:5]<-TRUE
+    
+  egg_swapped_bkp<-reproducing$egg_swapped
+    
   # Set random seed for reproducibility
   set.seed(seed + currentT)
   
   # Assign per-female nesting success and expected brood size
     
   reproducing<-reproducing%>%
+    dplyr::mutate(B0=NULL,Beta_sf=NULL,Beta_if=NULL,Beta_b=NULL)%>%
     dplyr::left_join(pars$nesting_success_df)
     
     
   prob_nest_sucess <- inv.logit(reproducing$B0+
-                                  # reproducing$Beta_sf * sfee+
-                                  # reproducing$Beta_if * ifor+
-                                  # reproducing$Beta_b * seff * ifor + 
-                                  0)
+                                  reproducing$Beta_sf * reproducing$sf +
+                                  reproducing$Beta_if * pars$improved_foraging[currentT]+
+                                  reproducing$Beta_b  * reproducing$sf * pars$improved_foraging[currentT] +
+                                  0) * 
+    ((1-pars$prob_nest_aband) ^ as.numeric(reproducing$egg_swapped))
   
-  reproducing<-tidy_pop_df(reproducing)%>%
-    left_join(pars$brood_size_df)
-  
+  reproducing<-reproducing%>%
+    dplyr::mutate(B0=NULL,Beta_sf=NULL,Beta_if=NULL,Beta_b=NULL)%>%
+    dplyr::left_join(pars$brood_size_df)
   
   brood_size <- exp(reproducing$B0+
-                            # reproducing$Beta_sf * sfee +
-                            # reproducing$Beta_if * ifor +
-                            # reproducing$Beta_b * seff * ifor + 
-                            0)%>%
+                      reproducing$Beta_sf * reproducing$sf +
+                      reproducing$Beta_if * pars$improved_foraging[currentT]+
+                      reproducing$Beta_b  * reproducing$sf * pars$improved_foraging[currentT] +
+                      0)%>%
     pmax(0)%>%
     pmin(pars$max_brood_size)%>%
     identity()
+  
+  reproducing$egg_swapped<-egg_swapped_bkp
+  
+  av_p_fl<-brood_size/pars$max_brood_size # calculate the expected probability of fledging from each egg
+  av_p_fl_tr<-adjust_probability(av_p_fl,odds_ratio = pars$transp_fl_OR)
+  
+  brood_size[reproducing$egg_swapped]<-brood_size[reproducing$egg_swapped]*(av_p_fl_tr[reproducing$egg_swapped]/av_p_fl[reproducing$egg_swapped])
+  
+  expEggsUnfledged<-sum((reproducing$egg_swapped)*(1-(av_p_fl_tr*prob_nest_sucess))*pars$max_brood_size)
   
   # Simulate number of offspring per reproducing female
   offspring <- sapply(seq_along(reproducing$id), function(i) {
     rbinom(n = 1, size = 1, prob = prob_nest_sucess[i]) *
       rtpois(n = 1, lambda = brood_size[i], max = pars$max_brood_size + 0.01)
   })
+  
   
   # Determine subpopulation for each offspring
   newSubpop <- lapply(seq_along(reproducing$id), function(i) {
@@ -260,13 +319,15 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
   
   # Determine subpopulation for each offspring
   motherIDs <- lapply(seq_along(reproducing$id), function(i) {
-    rep(reproducing$id[i], offspring[i])
+    tempId<-ifelse(reproducing$egg_swapped[i],NA,reproducing$id[i])
+    rep(tempId, offspring[i])
   }) %>%
     unlist() 
   
   # Determine subpopulation for each offspring
   fatherIDs <- lapply(seq_along(reproducing$id), function(i) {
-    rep(reproducing$pair[i], offspring[i])
+    tempId<-ifelse(reproducing$egg_swapped[i],NA,reproducing$pair[i])
+    rep(tempId, offspring[i])
   }) %>%
     unlist()  
   
@@ -280,16 +341,27 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
     sex = newSex,
     subpop = newSubpop,
     t = currentT,
+    # t = currentT+1,
     alive = TRUE,
     pair = NA,
     mother_id=motherIDs,
+    origin="Wild",
     father_id=fatherIDs
-  )}else{born<-data.frame()}
+  )
+  
+  # if no reproduction
+  }else{
+    
+    expEggsUnfledged<-0
+    
+    born<-data.frame()
+    
+    }
   
   # Append new offspring to existing population
   newpop <- plyr::rbind.fill(pop, born)
   
-  return(newpop)
+  return(born)
 }
 
 #----------------------------#
@@ -406,12 +478,12 @@ generate_unique_ids <- function(n, existing = character(0),
 
 tidy_pop_df <- function(df){
   
-  if(is.null(df$priority)){df$priority<-0}
+  suppressWarnings({if(is.null(df$priority)){df$priority<-0}})
   
   resu<-df%>%
-  dplyr::arrange(desc(priority)) %>%           # Prioritize updates
+  dplyr::arrange(desc(priority),desc(t)) %>%           # Prioritize updates
     dplyr::filter(!duplicated(data.frame(id,t))) %>%           # Keep only one entry per individual
-    dplyr::select(id, subpop, sex, age, t, alive, pair,mother_id,father_id,origin,age_release,release_strat,release_time,habituation,tsr)
+    dplyr::select(id, subpop, sex, age, t, alive, pair,mother_id,father_id,origin,age_release,release_meth,release_time,habituation,tsr)
   
   return(resu)
 }
@@ -458,24 +530,38 @@ calculate_inbreeding <- function(pop, initial_inb = NULL) {
 
 
 
-adjust_probability <- function(prob, odds_ratio) {
+adjust_probability <- function(prob, odds_ratio,prop=1) {
+  
   if (any(prob <= 0) || any(prob >= 1)) {
-    stop("Probability must be between 0 and 1 (exclusive).")
+    warning("Probability must be between 0 and 1 (exclusive).")
   }
+  
   if (any(odds_ratio <= 0)) {
     stop("Odds ratio must be greater than 0.")
   }
   
+  prop[is.na(prop)] <- 1
+  
   odds <- prob / (1 - prob)
+  
   adjusted_odds <- odds * odds_ratio
   adjusted_prob <- adjusted_odds / (1 + adjusted_odds)
   
-  return(adjusted_prob)
+  adjusted_prob[prob%in%c(0,1)]<-prob[prob%in%c(0,1)]
+  
+  resu<- (prob^(1-prop)) * (adjusted_prob^prop)
+  
+  return(resu)
 }
 
 
 
-
+release_schedule <- function(pars,release_schedule){
+  
+  
+  
+  
+}
 
 
 

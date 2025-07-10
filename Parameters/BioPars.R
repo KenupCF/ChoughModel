@@ -23,6 +23,8 @@ dispersalMat <- matrix(c(
 
 rownames(dispersalMat) <- colnames(dispersalMat) <- c("A", "B", "C", "D", "E")
 
+model_pars$bio$dispersalMat<-dispersalMat
+
 cor_env_repro_surv <- 0
 cor_env_among_pops <- 1
 
@@ -56,7 +58,7 @@ model_pars$bio$inherent$max_prog_per_brood <- 5
 model_pars$bio$inherent$sex_ratio <-	0.5
 model_pars$bio$inherent$prop_fem_breed<-1
 model_pars$bio$inherent$prop_mal_breed<-1
-
+model_pars$bio$inherent$av_clutch_size<-4
 
 #### Mortality handling
 {
@@ -107,11 +109,11 @@ mort_long <- mort_df %>%
 
 # Step 2: create proper age_class label
 mort_long <- mort_long %>%
-  mutate(age_class = recode(age_class_raw,
+  dplyr::mutate(age_class = recode(age_class_raw,
                             "m1" = "1",
                             "m2" = "2",
                             "mad" = "ad")) %>%
-  select(subpop, age_class, mortality)
+  dplyr::select(subpop, age_class, mortality)
 
 # Step 1: pivot to long format
 mort_long_sd <- mort_sd_df %>%
@@ -121,11 +123,11 @@ mort_long_sd <- mort_sd_df %>%
 
 # Step 2: create proper age_class label
 mort_long_sd <- mort_long_sd %>%
-  mutate(age_class = recode(age_class_raw,
+  dplyr::mutate(age_class = recode(age_class_raw,
                             "m1" = "1",
                             "m2" = "2",
                             "mad" = "ad")) %>%
-  select(subpop, age_class, mortality_sd)
+  dplyr::select(subpop, age_class, mortality_sd)
 
 
 mort_long<-left_join(mort_long,mort_long_sd)%>%
@@ -189,7 +191,7 @@ brood_df <- brood_df %>%
     par = paste0("brood_", subpop),
     dist = "norm"
   ) %>%
-  select(mean, sd, dist, par)
+  dplyr::select(mean, sd, dist, par)
 
 # Step 3: Create named list of distribution rows
 brood_dists <- split(brood_df, brood_df$par)

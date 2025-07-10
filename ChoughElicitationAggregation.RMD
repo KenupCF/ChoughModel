@@ -45,8 +45,6 @@ library(tidyr)
 library(purrr)
 # library(zoo)
 
-library(shinyjs)
-library(htmltools)
 # require(httpuv)
 library(mc2d)
 # library(grDevices)
@@ -62,7 +60,7 @@ library(stringr)
 library(lubridate)
 library(googledrive)
 library(devtools)
-# library(rvest)
+library(fitdistrplus)
 
 
 shinyOptions(cache = cachem::cache_disk(getwd()))
@@ -517,6 +515,7 @@ cdf_function_list<-
 find_quantile_functions<-
 quantile_functions<-
 monte_carlo_quantiles<-
+monte_carlo_quantiles_optm<-
 distribution_functions<-
 pdf_lp<-list()
 
@@ -626,6 +625,32 @@ for(i in seq_along(lpool_df_split)){
       return(x_samples[indexes])
     }
   })
+  
+  monte_carlo_quantiles_optm[[i]] <- local({
+  density_funcs <- density_functions[[i]]
+  lower_bound <- linear_pool_ranges[[i]][1]
+  upper_bound <- linear_pool_ranges[[i]][2]
+
+  function(q, n_samples = 1e6) {
+    require(mc2d)
+
+    # Generate Latin Hypercube Samples (more efficient + no need to sort)
+    x_samples <- lhs(nsv = n_samples, nsu = 1, min = lower_bound, max = upper_bound)[,1]
+
+    # Evaluate all densities at once (vectorized and fast)
+    densities_matrix <- vapply(density_funcs, function(d) d(x_samples), numeric(length(x_samples)))
+    avg_densities <- rowMeans(densities_matrix)
+
+    # Compute normalized weights (probability mass function)
+    weights <- avg_densities / sum(avg_densities)
+
+    # Construct empirical CDF
+    cdf <- cumsum(weights)
+
+    # Fast interpolation of quantiles using approx (vectorized over q)
+    approx(x = cdf, y = x_samples, xout = q, method = "linear", rule = 2)$y
+  }
+  })
 
   
   pdf_values<-linear_pool_pdf(x=x_values,FUN = density_functions[[i]])
@@ -647,6 +672,7 @@ names(pdf_lp)<-
   names(quantile_functions)<-
   names(find_quantile_functions)<-
   names(monte_carlo_quantiles)<-
+  names(monte_carlo_quantiles_optm)<-
   names(cdf_function_list)<-
   names(density_functions)<-
   names(linear_pool_ranges)<-
@@ -797,6 +823,7 @@ PDF<-plyr::rbind.fill(PDF_refit,PDF_lp)
 agg_info<-list(LP=
                  list(quantile_functions=quantile_functions,
                       mc_q_functions=monte_carlo_quantiles,
+                      mc_q_functions2=monte_carlo_quantiles_optm,
                       density_functions=density_functions)
                ,RF=list(fitted_dist=fitted_dist)
                ,samples=samples
@@ -804,7 +831,7 @@ agg_info<-list(LP=
                )
 
 
-save(agg_info,linear_pool_qsample,linear_pool_pdf,file=("./Data/Expert_Elicitation_Aggregation.RData"))
+save(agg_info,linear_pool_qsample,linear_pool_pdf,file=("./Data/Expert_Elicitation_Aggregation_v2.RData"))
 
 
 
