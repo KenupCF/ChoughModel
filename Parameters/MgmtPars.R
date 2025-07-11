@@ -45,7 +45,8 @@ rel_strat_01 <- expand.grid(
   release_time     = NA_character_,
   release_meth    = NA_character_,
   noEggsReleased   = 1:20,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_02 <- expand.grid(
@@ -56,7 +57,8 @@ rel_strat_02 <- expand.grid(
   release_time     = "Summer",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_03 <- expand.grid(
@@ -67,7 +69,8 @@ rel_strat_03 <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_04 <- expand.grid(
@@ -78,7 +81,8 @@ rel_strat_04 <- expand.grid(
   release_time     = "Summer",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_05 <- expand.grid(
@@ -89,7 +93,8 @@ rel_strat_05 <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_06 <- expand.grid(
@@ -100,7 +105,8 @@ rel_strat_06 <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_07 <- expand.grid(
@@ -111,8 +117,9 @@ rel_strat_07 <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
-)
+  release_years    = 5,
+  subpop           = "A"
+  )
 
 rel_strat_08 <- expand.grid(
   release_size     = 1:20,
@@ -122,7 +129,8 @@ rel_strat_08 <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_09 <- expand.grid(
@@ -133,7 +141,8 @@ rel_strat_09 <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_10 <- expand.grid(
@@ -144,7 +153,8 @@ rel_strat_10 <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_11 <- expand.grid(
@@ -155,7 +165,8 @@ rel_strat_11 <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Staged",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strat_12 <- expand.grid(
@@ -166,7 +177,8 @@ rel_strat_12 <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Immediate",
   noEggsReleased   = 0,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )
 
 rel_strats<-plyr::rbind.fill(rel_strat_01,rel_strat_02,rel_strat_03,rel_strat_04,rel_strat_05,rel_strat_06,
@@ -182,6 +194,10 @@ rel_strat_test <- expand.grid(
   release_time     = "Winter",
   release_meth    = "Staged",
   noEggsReleased   = 5,
-  release_years    = 5
+  release_years    = 5,
+  subpop           = "A"
 )%>%
   dplyr::mutate(r=1:n())
+
+model_pars$mgmt$release_schedule_master<-rel_strat_test
+

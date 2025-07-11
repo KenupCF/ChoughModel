@@ -4,6 +4,10 @@ require(plyr)
 require(dplyr)
 require(tidyr)
 require(magrittr)
+require(lubridate)
+require(kinship2)
+
+
 
 model_pars<-list(priors=list(),sim=list(),bio=list(),mgmt=list())
 
@@ -24,16 +28,12 @@ source("./Functions/FUN.R")
 
 pars<-list(StartN=rep(10,5),
            sex_ratio=0.5,
-           no_age_classes=17,
-           max_age=17,
-           breeding_age=3,
+           no_age_classes=model_pars$bio$inherent$max_age,
+           max_age=model_pars$bio$inherent$max_age,
+           breeding_age=model_pars$bio$inherent$age_first_breed,
            nesting_success_df=nest_success_df,
            dispersalMat=dispersalMat,
-           dispersalAges=2,
-           max_brood_size=5,
-           av_brood_size=2.6
-           # ,phi_df=mort_long
-           )
+           Fp=model_pars$bio$gen$starting_inbreeding)
 
 
 
@@ -46,7 +46,11 @@ prior_rng<-priorSampling(model_pars$priors,
   dplyr::mutate(p = 1:n())
 source("./Parameters/priorHandling.R")
 
-mgmt_options<-expand.grid(SuppFeed=c("No","Current","Provisional"),ReleaseStrat=rel_strats$r)%>%
+mgmt_options<-expand.grid(SuppFeed=c(
+  # "No",
+  "Current"
+  # ,"Provisional"
+  ),ReleaseStrat=rel_strat_test$r)%>%
   dplyr::mutate(a=1:n())
 
 prior_rng<-merge(prior_rng,mgmt_options)%>%
@@ -65,7 +69,9 @@ source("./Parameters/pars_postPriorSampling.R")
 start_conditions<-list(init_pop=pop)
 model_pars$mgmt$supp_feeding_df<-model_pars$mgmt$supp_feeding_master[[prior_rng$SuppFeed[i]]]
 
-  
+model_pars$mgmt$release_schedule<-model_pars$mgmt$release_schedule_master%>%
+  dplyr::filter(r==prior_rng$ReleaseStrat[i])
+
 ### wrap this into a model function  
   
 suppressMessages({

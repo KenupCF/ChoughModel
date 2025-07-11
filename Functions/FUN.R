@@ -3,7 +3,7 @@ init_population <- function(pars, seed=19) {
   require(dplyr)
   
   # Check that required parameters are present
-  needed_pars <- c("StartN", "sex_ratio", "no_age_classes")
+  needed_pars <- c("StartN", "sex_ratio", "no_age_classes","Fp")
   par_names <- names(pars)
   missing_pars <- needed_pars[which(!needed_pars %in% par_names)]
   if(length(missing_pars) > 0){
@@ -39,6 +39,7 @@ init_population <- function(pars, seed=19) {
                   pair = NA_character_, mother_id = NA_character_, father_id = NA_character_,
                   origin="Wild",
                   release_meth=NA_character_,habituation=NA,release_time = NA_character_,
+                  Fi=pars$Fp,
                   age_release=NA,tsr=NA) #tsr = time since release (years)
   
   
@@ -49,7 +50,7 @@ init_population <- function(pars, seed=19) {
 mortality_aging <- function(pop, currentT, pars,seed=19) {
   
   # Check that required mortality parameter is provided
-  needed_pars <- c("phi_df","max_age","improved_foraging","acc_period_df","release_year_cont","supp_feeding_df")
+  needed_pars <- c("phi_df","max_age","improved_foraging","acc_period_df","release_year_cont","supp_feeding_df","full_pop")
   par_names <- names(pars)
   missing_pars <- needed_pars[which(!needed_pars %in% par_names)]
   if(length(missing_pars) > 0){
@@ -79,23 +80,28 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
       tsr>0~1,
       TRUE~yr_duration
     ))%>%
-    dplyr::group_by(id)%>%
-    dplyr::mutate(prop_year_acc=min(acc_period-tsr,yr_duration)/yr_duration)
+    # dplyr::group_by(id)%>%
+    dplyr::mutate(prop_year_acc=pmin(pmax(acc_period-tsr,0),yr_duration)/yr_duration)
+  
+  
+  # ib_df<-calculate_inbreeding(pop = pars$full_pop,pars=pars)
   
   # Assign constant survival probability
-  surv <- (
+  surv <-
           ### Calculate survival based on habitat conditions
           inv.logit(current$Beta0 + 
                     current$Beta_sf * current$sf +
                     current$Beta_if * pars$improved_foraging[currentT] +
                     current$Beta_b  * current$sf * pars$improved_foraging[currentT]
                     + 0)
-          #### Adjust by how much of the year individual spent in the wild
-           ^ current$yr_duration)%>%
-    ### adjust probability of surviving using odds-ratio, given the proportion of the period individual was under acclimation    
-    adjust_probability(current$OR_release,prop=current$prop_year_acc)
-    # adjust_probability(current$OR_release,prop=.75)
   
+          #### Adjust by how much of the year individual spent in the wild
+    surv<-surv ^ current$yr_duration
+    ### adjust probability of surviving using odds-ratio, given the proportion of the period individual was under acclimation    
+    surv<-adjust_probability(surv,current$OR_release,prop=current$prop_year_acc)
+    # adjust_probability(current$OR_release,prop=.75)
+  if(any(is.na(surv)) | any(surv < 0) | any(surv > 1)){stop("Invalid estimated survival probability")}
+    
   set.seed(seed)
   # Simulate survival for each individual using Bernoulli trial
   alive_vec <- sapply(seq_along(current$id), FUN = function(i) {
@@ -236,7 +242,7 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
   
   # Ensure required parameters are present
   needed_pars <- c("breeding_age","av_clutch_size","sex_ratio", "max_brood_size", 
-                   "nesting_success_df", "brood_size_df", ,"supp_feeding_df","improved_foraging",
+                   "nesting_success_df", "brood_size_df","supp_feeding_df","improved_foraging",
                    "transp_fl_OR","eggs_replaced_fem_ids","no_eggs_replaced","prob_nest_aband",
                    "all_ids")
   
@@ -259,10 +265,19 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
                                         TRUE~FALSE))%>%
     dplyr::left_join(pars$supp_feeding_df)
     
+  
   if(nrow(reproducing)>0){
     
-  # reproducing$egg_swapped[1:5]<-TRUE
-    
+  no_surrogate_nests<-round(pars$release_schedule_df$noEggsReleased/pars$max_brood_size)
+  
+  candidate_surrogates<-reproducing%>%
+    filter(is.na(tsr),subpop%in%pars$release_schedule_df$subpop)%>%
+    pull(id)
+  
+  set.seed(seed + currentT)
+  surrogates<-sample(candidate_surrogates,size = min(no_surrogate_nests,length(candidate_surrogates)),replace=F)
+  
+  reproducing$egg_swapped[reproducing$id%in%surrogates]<-TRUE
   egg_swapped_bkp<-reproducing$egg_swapped
     
   # Set random seed for reproducibility
@@ -302,7 +317,13 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
   
   brood_size[reproducing$egg_swapped]<-brood_size[reproducing$egg_swapped]*(av_p_fl_tr[reproducing$egg_swapped]/av_p_fl[reproducing$egg_swapped])
   
-  expEggsUnfledged<-sum((reproducing$egg_swapped)*(1-(av_p_fl_tr*prob_nest_sucess))*pars$max_brood_size)
+  expEggsUnfledged<-sum( 
+    
+     (reproducing$egg_swapped)*
+       
+     (1-(av_p_fl_tr*prob_nest_sucess))*
+       
+     pars$max_brood_size)
   
   # Simulate number of offspring per reproducing female
   offspring <- sapply(seq_along(reproducing$id), function(i) {
@@ -310,6 +331,7 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
       rtpois(n = 1, lambda = brood_size[i], max = pars$max_brood_size + 0.01)
   })
   
+  actEggsUnfledged<-(pars$max_brood_size*no_surrogate_nests)-sum(offspring[reproducing$egg])
   
   # Determine subpopulation for each offspring
   newSubpop <- lapply(seq_along(reproducing$id), function(i) {
@@ -353,6 +375,7 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
   }else{
     
     expEggsUnfledged<-0
+    actEggsUnfledged<-0
     
     born<-data.frame()
     
@@ -361,7 +384,7 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
   # Append new offspring to existing population
   newpop <- plyr::rbind.fill(pop, born)
   
-  return(born)
+  return(list(born=born,expEggsUnfledged=expEggsUnfledged,actEggsUnfledged=actEggsUnfledged))
 }
 
 #----------------------------#
@@ -483,7 +506,9 @@ tidy_pop_df <- function(df){
   resu<-df%>%
   dplyr::arrange(desc(priority),desc(t)) %>%           # Prioritize updates
     dplyr::filter(!duplicated(data.frame(id,t))) %>%           # Keep only one entry per individual
-    dplyr::select(id, subpop, sex, age, t, alive, pair,mother_id,father_id,origin,age_release,release_meth,release_time,habituation,tsr)
+    dplyr::select(id, subpop, sex, age, t, alive, pair,mother_id,father_id,Fi,
+                  origin,age_release,release_meth,release_time,habituation,tsr)%>%
+    dplyr::arrange(desc(alive),subpop,age,mother_id,origin)
   
   return(resu)
 }
@@ -555,13 +580,154 @@ adjust_probability <- function(prob, odds_ratio,prop=1) {
 }
 
 
-
-release_schedule <- function(pars,release_schedule){
+releases<-function(pars,currentT){
   
+  # Ensure required parameters are present
+  needed_pars <- c("release_schedule_df","all_ids")
   
+  par_names <- names(pars)
   
+  missing_pars <- needed_pars[which(!needed_pars %in% par_names)]
+  
+  if(length(missing_pars) > 0){
+    stop(paste0("Error: Missing parameters are ", paste0(missing_pars, collapse = ", ")))
+  }
+  
+  if(nrow(pars$release_schedule_df)>1){
+    stop("Error with release schedule")
+  }
+  
+  lastRelease<-unique(pars$release_schedule_df$release_years)
+  
+  if(currentT<=lastRelease){
+    
+    # Generate unique IDs for all new offspring
+    released <- data.frame(
+      id = generate_unique_ids(n = pars$release_schedule_df$release_size, existing = pars$all_ids),
+      age = pars$release_schedule_df$age_release,
+      age_release = pars$release_schedule_df$age_release,
+      sex = c("F", "M")[rbinom(n = pars$release_schedule_df$release_size, size = 1, prob = 0.5) + 1],
+      subpop = pars$release_schedule_df$subpop,
+      t = currentT,
+      # t = currentT+1,
+      alive = TRUE,
+      pair = NA,
+      mother_id=NA,
+      release_meth=pars$release_schedule_df$release_meth,
+      release_time=pars$release_schedule_df$release_time,
+      habituation=pars$release_schedule_df$habituation,
+      origin=pars$release_schedule_df$origin,
+      tsr=0,
+      father_id=NA
+    )      
+  }else{
+    
+  released<-data.frame()
+  }
+  
+  return(released)
   
 }
+
+calculate_kinship <- function(pop_df, pars) {
+  
+  # Specify required parameters
+  needed_pars <- c("founder_ids", "founder_kinship")
+  
+  # Prepare pedigree dataframe by selecting relevant columns and removing duplicates
+  ped_df <- pop_df %>%
+    dplyr::filter(!duplicated(id)) %>%
+    dplyr::select(id, mother_id, father_id, sex)
+  
+  # Create pedigree object using the 'kinship2' package's pedigree function
+  ped <- with(ped_df, pedigree(id = id, momid = mother_id, dadid = father_id, sex = ifelse(sex == "M", 1, 2)))
+  
+  # Calculate kinship matrix from the pedigree
+  kin <- kinship(ped)
+  
+  # Override kinship values for founders with user-provided values
+  kin[pars$founder_ids, pars$founder_ids] <- pars$founder_kinship
+  
+  # The following commented section creates all possible dam × sire combinations
+  # and calculates their kinship, accounting for founder kinship.
+  # It has been commented out but may be useful for specific mating evaluations.
+  
+  return(kin)
+}
+
+
+calculate_inbreeding <- function(pop_df, pars) {
+  
+  # Specify required parameters
+  needed_pars <- c("founder_ids", "Fp")
+  
+  # Get kinship matrix using the earlier function
+  kin <- calculate_kinship(pop_df = pop_df, pars = pars)
+  
+  # Prepare the main population dataframe
+  temp <- pop_df %>%
+    dplyr::arrange(is.na(Fi))%>%
+    dplyr::filter(!duplicated(id)) %>%
+    dplyr::mutate(
+      # Assign founder inbreeding if missing and listed as a founder
+      Fi = case_when(
+        is.na(Fi) & id %in% pars$founder_ids ~ pars$Fp,
+        # Assign Fi = 0 for individuals with no known parents and not in founder_ids
+        is.na(Fi) & is.na(mother_id) & is.na(father_id) ~ 0,
+        # Otherwise keep existing Fi
+        TRUE ~ Fi
+      ),
+      priority = 1,  # Used later to track original vs. imputed entries
+      t = NULL       # Remove any existing 't' variable
+    )
+  
+  # Extract individuals still missing Fi
+  missing_Fi <- temp %>%
+    dplyr::filter(is.na(Fi)) %>%
+    dplyr::mutate(priority = 2)  # Mark as needing estimation
+  
+  # Lookup kinship between each individual's parents
+  parent_kin <- kin[missing_Fi$mother_id, missing_Fi$father_id] %>% diag()
+  
+  # Extract Fi for fathers of missing individuals
+  Fdad <- temp %>%
+    dplyr::filter(!is.na(Fi), sex == "M") %>%
+    dplyr::pull(Fi)
+  names(Fdad) <- temp %>%
+    dplyr::filter(!is.na(Fi), sex == "M") %>%
+    dplyr::pull(id)
+  Fdad <- Fdad[missing_Fi$father_id]
+  
+  # Extract Fi for mothers of missing individuals
+  Fmom <- temp %>%
+    dplyr::filter(!is.na(Fi), sex == "F") %>%
+    dplyr::pull(Fi)
+  names(Fmom) <- temp %>%
+    dplyr::filter(!is.na(Fi), sex == "F") %>%
+    dplyr::pull(id)
+  Fmom <- Fmom[missing_Fi$mother_id]
+  
+  # Estimate inbreeding coefficients using standard formula:
+  # Fi = (Fi_mother + Fi_father)/2 + kin(mother, father) * (1 - (Fi_mother + Fi_father)/2)
+  Fi <- ((Fdad + Fmom) / 2) + (parent_kin * (1 - ((Fdad + Fmom) / 2)))
+  
+  # Assign calculated Fi back to missing individuals
+  missing_Fi$Fi <- Fi
+  
+  # Combine estimated and original individuals; mark all with t = -1
+  new <- plyr::rbind.fill(temp, missing_Fi) %>%
+    mutate(t = -1)
+  
+  # Clean and return output using tidy_pop_df
+  resu <- tidy_pop_df(new) %>%
+  dplyr::select(id,Fi)
+  
+  if(any(is.na(resu$Fi))){stop("Some Fi's not calculated")}
+  
+  return(resu)
+}
+
+
 
 
 

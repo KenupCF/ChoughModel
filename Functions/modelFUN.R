@@ -1,5 +1,6 @@
 run_model<-function(start_conditions,model_pars){
   
+  start.<-now()
   n_years<-model_pars$sim$n_years
   
   
@@ -13,10 +14,15 @@ run_model<-function(start_conditions,model_pars){
   pars$max_brood_size<-model_pars$bio$inherent$max_prog_per_brood
   pars$av_clutch_size<-model_pars$bio$inherent$av_clutch_size
   
-  pars$supp_feed_df<-model_pars$mgmt$supp_feeding_df
+  pars$Fp<-model_pars$bio$gen$starting_inbreeding
+  pars$founder_kinship    <-model_pars$bio$gen$founder_kinship
   
-  pars$acc_period_df<-model_pars$mgmt$acc_period_df
-  pars$release_year_cont<-model_pars$mgmt$release_year_cont
+  pars$supp_feeding_df<-model_pars$mgmt$supp_feeding_df
+  
+  pars$acc_period_df      <-model_pars$mgmt$acc_period_df
+  pars$release_year_cont  <-model_pars$mgmt$release_year_cont
+  pars$release_schedule_df<-model_pars$mgmt$release_schedule
+  
   
   pars$eggs_replaced_fem_ids<-character()
   pars$prob_nest_aband<-model_pars$mgmt$prob_nest_aband
@@ -44,15 +50,30 @@ run_model<-function(start_conditions,model_pars){
   
   pop<-start_conditions$init_pop
   
-  suppressMessages({
-    
-  for(j in 1:n_years){
-
+  pars$founder_ids<-unique(pop$id)
+  
+  j<-1
+  
+  # while(j <= n_years){
+  while(j <= 8){
+      
     pars$all_ids<-unique(pop$id)
     
     currentPop0<-pop%>%
       dplyr::filter(t==j-1,alive)%>%
       dplyr::mutate(t=j)
+    
+    released<-releases(pars=pars,currentT = j)
+    
+    pars$full_pop<-plyr::rbind.fill(pop,released)
+    
+    currentPop0<-plyr::rbind.fill(currentPop0,released)
+    
+    pars$all_ids<-unique(c(pars$all_ids,pars$full_pop$id))
+    
+    currentPop0<-currentPop0%>%
+      dplyr::mutate(Fi=NULL)%>%
+      dplyr::left_join(calculate_inbreeding(pop_df=pars$full_pop,pars=pars))
     
     currentPop1<-mortality_aging(pop=currentPop0,currentT = j,pars=pars)
     
@@ -62,13 +83,17 @@ run_model<-function(start_conditions,model_pars){
     
     currentPop4<-dispersal(pop=currentPop3,currentT = j,pars=pars)
     
-    born<-recruitment(pop=currentPop4,currentT = j,pars=pars)
+    born_resu<-recruitment(pop=currentPop4,currentT = j,pars=pars)
     
     
-    pop<-plyr::rbind.fill(pop,currentPop4,born)%>%
+    pop<-plyr::rbind.fill(pop,currentPop4,born_resu$born)%>%
       tidy_pop_df()
     
+    
+    
+    print(j)
+  j<-j+1
   }
-  })
+  # })
   
 }

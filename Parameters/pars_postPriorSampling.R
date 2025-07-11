@@ -117,7 +117,8 @@ or_df<-plyr::rbind.fill(
     origin=c("Captive","Captive","Wild","Wild"),
     age_release=2,
     release_meth="Staged",
-    release_time="Winter"),
+    release_time="Winter")%>%
+    merge(data.frame(age=2:model_pars$bio$inherent$max_age)),
   data.frame(OR_release=1/exp(
     c(prior_rng$logcor_ad_c_st_h[i],
       prior_rng$logcor_ad_c_st_nh[i],
@@ -129,17 +130,20 @@ or_df<-plyr::rbind.fill(
     release_time="Winter")%>%
     merge(data.frame(
       age_release = model_pars$bio$inherent$age_first_breed:model_pars$bio$inherent$max_age
-    )))%>%
-  merge(data.frame(
-    age = model_pars$bio$inherent$age_first_breed:model_pars$bio$inherent$max_age
-  ))
+    ))%>%
+    merge(data.frame(
+      age = model_pars$bio$inherent$age_first_breed:model_pars$bio$inherent$max_age
+    ))
+  )
 
 model_pars$bio$surv_coeff<-model_pars$bio$surv_coeff%>%
   dplyr::left_join(or_df)%>%
+  dplyr::filter(!(is.na(OR_release) & !is.na(age_release)))%>%
   dplyr::mutate(OR_release=case_when(
-    is.na(OR_release)~1,
-    TRUE~OR_release
-  ))
+  is.na(OR_release)~1,
+  TRUE~OR_release
+  ))%>%
+  dplyr::ungroup()
 
 
 

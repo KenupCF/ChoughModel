@@ -1,6 +1,13 @@
 
 
 model_pars$bio$inherent<-list()
+model_pars$bio$gene<-list()
+
+model_pars$bio$gen$starting_inbreeding<-0.1
+model_pars$bio$gen$founder_kinship<-0.1
+
+model_pars$priors$diploid_eq<-data.frame(min=3,max=15,dist="unif")
+
 
 NoAgeClasses<-3
 
