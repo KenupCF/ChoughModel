@@ -50,7 +50,10 @@ init_population <- function(pars, seed=19) {
 mortality_aging <- function(pop, currentT, pars,seed=19) {
   
   # Check that required mortality parameter is provided
-  needed_pars <- c("phi_df","max_age","improved_foraging","acc_period_df","release_year_cont","supp_feeding_df","full_pop")
+  needed_pars <- c("phi_df","max_age","improved_foraging",
+                   "dip_leth_eq",
+                   "carr_capac_df",
+                   "acc_period_df","release_year_cont","supp_feeding_df","full_pop")
   par_names <- names(pars)
   missing_pars <- needed_pars[which(!needed_pars %in% par_names)]
   if(length(missing_pars) > 0){
@@ -62,12 +65,6 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
   current <- pop %>%
     dplyr::filter(t == currentT,alive)
   
-  # current$habituation[1]<-1
-  # current$release_meth[1]<-"Staged"
-  # current$release_time[1]<-"Winter"
-  # current$age_release[1]<-current$age[1]
-  # current$origin[1]<-"Captive"
-  # current$tsr[1]<-.5
   
   current<-current%>%
     
@@ -83,6 +80,11 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
     # dplyr::group_by(id)%>%
     dplyr::mutate(prop_year_acc=pmin(pmax(acc_period-tsr,0),yr_duration)/yr_duration)
   
+  N_df<-current%>%
+    dplyr::group_by(subpop)%>%
+    dplyr::summarise(N=sum(alive))%>%
+  dplyr::left_join(pars$carr_capac_df)%>%
+  dplyr::mutate(AboveC=N>C,surv_trunc=1/(N/C))
   
   # ib_df<-calculate_inbreeding(pop = pars$full_pop,pars=pars)
   
@@ -94,18 +96,31 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
                     current$Beta_if * pars$improved_foraging[currentT] +
                     current$Beta_b  * current$sf * pars$improved_foraging[currentT]
                     + 0)
-  
-          #### Adjust by how much of the year individual spent in the wild
+    
+   
+    # add inbreeding depressio on survival if it is age class 1
+    surv <- exp(log(surv) - current$Fi*(pars$dip_leth_eq/2)*(current$age==1) )
+     
+     
+    #### Adjust by how much of the year individual spent in the wild
     surv<-surv ^ current$yr_duration
+    
     ### adjust probability of surviving using odds-ratio, given the proportion of the period individual was under acclimation    
     surv<-adjust_probability(surv,current$OR_release,prop=current$prop_year_acc)
-    # adjust_probability(current$OR_release,prop=.75)
-  if(any(is.na(surv)) | any(surv < 0) | any(surv > 1)){stop("Invalid estimated survival probability")}
+    
+    current$surv<-surv
+    
+    current<-current%>%
+      dplyr::left_join(N_df)%>%
+      dplyr::mutate(surv=case_when(AboveC~surv_trunc,
+                                   TRUE~surv))
+          
+    if(any(is.na(surv)) | any(surv < 0) | any(surv > 1)){stop("Invalid estimated survival probability")}
     
   set.seed(seed)
   # Simulate survival for each individual using Bernoulli trial
   alive_vec <- sapply(seq_along(current$id), FUN = function(i) {
-    rbinom(n = 1, size = 1, prob = surv[i])
+    rbinom(n = 1, size = 1, prob = current$surv[i])
   }) == 1 & 
     current$alive & 
     current$age < pars$max_age

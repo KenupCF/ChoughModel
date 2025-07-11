@@ -25,8 +25,8 @@ source("./Parameters/BioPars.R")
 source("./Parameters/MgmtPars.R")
 source("./Functions/FUN.R")
 
-
-pars<-list(StartN=rep(10,5),
+  
+pars<-list(StartN=StartN,
            sex_ratio=0.5,
            no_age_classes=model_pars$bio$inherent$max_age,
            max_age=model_pars$bio$inherent$max_age,
@@ -44,6 +44,7 @@ prior_rng<-priorSampling(model_pars$priors,
                          # size=2)%>%
                          size=model_pars$sim$n_iter)%>%
   dplyr::mutate(p = 1:n())
+
 source("./Parameters/priorHandling.R")
 
 mgmt_options<-expand.grid(SuppFeed=c(

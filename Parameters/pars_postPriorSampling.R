@@ -1,5 +1,7 @@
 # Create a data frame of survival coefficients for adults
 
+model_pars$bio$gen$dip_leth_eq<-prior_rng$diploid_eq[i]
+
 NA_adj<-1/(model_pars$mgmt$release_year_cont%>%filter(is.na(release_time))%>%pull(yr_duration))
 smr_adj<-1/(model_pars$mgmt$release_year_cont%>%filter(release_time=="Summer")%>%pull(yr_duration))
 wtr_adj<-1/(model_pars$mgmt$release_year_cont%>%filter(release_time=="Winter")%>%pull(yr_duration))
@@ -195,5 +197,7 @@ model_pars$mgmt$prob_for_imp <- prior_rng$prob_imp_for[i]
 model_pars$mgmt$year_for_imp <- prior_rng$year_imp_for[i] 
 
 
+
+startK
 
 

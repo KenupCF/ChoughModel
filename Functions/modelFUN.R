@@ -16,6 +16,7 @@ run_model<-function(start_conditions,model_pars){
   
   pars$Fp<-model_pars$bio$gen$starting_inbreeding
   pars$founder_kinship    <-model_pars$bio$gen$founder_kinship
+  pars$dip_leth_eq<-model_pars$bio$gen$dip_leth_eq
   
   pars$supp_feeding_df<-model_pars$mgmt$supp_feeding_df
   
@@ -30,7 +31,7 @@ run_model<-function(start_conditions,model_pars){
   pars$no_eggs_replaced<-NA
   
   
-  
+  pars$carr_capac_df<-model_pars$bio$carr_capac_df
   pars$phi_df<-model_pars$bio$surv_coeff
   pars$nesting_success_df<-model_pars$bio$nest_succ_coeff
   pars$brood_size_df<-model_pars$bio$brood_size_coeff

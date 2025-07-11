@@ -8,11 +8,22 @@ n_samples_mc <- model_pars$sim$n_samples_quantile_function
 ## Basline Demographic Parameters
 ## -----------------------------
 
-prior_rng$bl_fst_yr_surv_A<-qFUN$`surv A_1`(x = prior_rng$Q_bl_surv)
-prior_rng$bl_fst_yr_surv_B<-qFUN$`surv B_1`(x = prior_rng$Q_bl_surv)
-prior_rng$bl_fst_yr_surv_C<-qFUN$`surv C_1`(x = prior_rng$Q_bl_surv)
-prior_rng$bl_fst_yr_surv_D<-qFUN$`surv D_1`(x = prior_rng$Q_bl_surv)
-prior_rng$bl_fst_yr_surv_E<-qFUN$`surv E_1`(x = prior_rng$Q_bl_surv)
+adjust_survival<-function(x,Fp=model_pars$bio$gen$starting_inbreeding,DipLetEq){
+  
+  surv<-inv.logit(x)
+  
+  adj<-exp(log(surv) + Fp*DipLetEq/2)
+  
+  resu<-logit(adj)
+  
+  return(resu)
+}
+
+prior_rng$bl_fst_yr_surv_A<-qFUN$`surv A_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)
+prior_rng$bl_fst_yr_surv_B<-qFUN$`surv B_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)
+prior_rng$bl_fst_yr_surv_C<-qFUN$`surv C_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)
+prior_rng$bl_fst_yr_surv_D<-qFUN$`surv D_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)
+prior_rng$bl_fst_yr_surv_E<-qFUN$`surv E_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)
 
 prior_rng$bl_sad_surv_A<-qFUN$`surv A_2`(x = prior_rng$Q_bl_surv)
 prior_rng$bl_sad_surv_B<-qFUN$`surv B_2`(x = prior_rng$Q_bl_surv)

@@ -19,6 +19,8 @@ sum(StartN)
 
 SubPopK<-c(100,60,90,90,150)
 
+model_pars$bio$carr_capac_df<-data.frame(subpop=subpops,C=SubPopK)
+
 
 dispersalMat <- matrix(c(
   35, 15, 25, 0, 25,
