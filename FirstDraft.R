@@ -1,31 +1,33 @@
-require(gtools)
-require(stringr)
-require(plyr)
-require(dplyr)
-require(tidyr)
-require(magrittr)
-require(lubridate)
-require(kinship2)
+runLabel<-"toyV1"
+get_runs_from_gsheet<-TRUE
+replace_runs_gsheet<-FALSE
+prior_rng_seed<-19910526
 
+source("packageLoader.R")
+source("functionLoader.R")
+
+sheet_url <- "https://docs.google.com/spreadsheets/d/1dCIkkofz0h2s9MWOtZfNqAN4DKY59Z2IqNIWlM3isMY/edit?gid=903185379#gid=903185379"
+
+gs4_auth(path = "./.tokens/fresh-replica-344321-0e0618a3b5de.json")
+
+### Acessing Google Drive
+token <- readRDS(".tokens/token.rds")
+drive_auth(token = token)
+
+### Get device name
+source(".tokens/setDeviceName.R")
 
 
 model_pars<-list(priors=list(),sim=list(),bio=list(),mgmt=list())
 
-
 load("./Data/Expert_Elicitation_Aggregation.RData")
 
-devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/multiUserPERTplot.R")
-
 devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/phd_experimental_functions.R")
-
 devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/Quick%20Functions.R")
 
 source("./Parameters/SimPars.R")
 source("./Parameters/BioPars.R")
 source("./Parameters/MgmtPars.R")
-source("./Functions/FUN.R")
-source("./Functions/FUNgen.R")
-
   
 pars<-list(StartN=StartN,
            sex_ratio=0.5,
@@ -40,8 +42,8 @@ pars<-list(StartN=StartN,
 ### Sample uncertain parameters, given the description of their distribution
 prior_rng<-priorSampling(model_pars$priors,
                          seed = 26051991,
-                         size=1e3)%>%
-                         # size=model_pars$sim$n_iter)%>%
+                         # size=1e3)%>%
+                         size=model_pars$sim$n_iter)%>%
   dplyr::mutate(p = 1:n())
 
 source("./Parameters/priorHandling.R")
@@ -51,19 +53,242 @@ mgmt_options<-expand.grid(SuppFeed=c(
   "Current"
   ,"Provisional"
   ),ReleaseStrat=rel_strats$r)%>%
-  dplyr::mutate(a=1:n())
+  dplyr::mutate(alt=1:n())
 
 prior_rng<-merge(prior_rng,mgmt_options)%>%
-  dplyr::arrange(p,a)%>%
-  dplyr::mutate(i=1:n())
+  dplyr::arrange(p,alt)%>%
+  dplyr::mutate(i=1:n(),Label=runLabel)
 
+if(get_runs_from_gsheet | replace_runs_gsheet){
+  runs<- read_sheet(sheet_url,sheet="Runs")%>%
+    replace_na_characters()
+  
+  runs2<-full_join(runs,
+                   prior_rng%>%
+                     dplyr::mutate(Iteration=i)%>%
+                     dplyr::select(Label,alt,Iteration,p)
+                   # ,by=c("Label","Iteration"),all.x=TRUE,all.y=TRUE
+  )%>%
+    dplyr::arrange(Label,Iteration)%>%
+    dplyr::mutate(ID=paste(Label,zero_pad(Iteration,5),sep="_"))
+  
+  if(replace_runs_gsheet){
+    write_sheet(runs2, sheet_url, sheet = "Runs")
+  }
+  
+}
+
+#### Get iterations to run on this script run
+if(get_runs_from_gsheet){
+  
+  n_p_used<-1e3
+  
+  p_summ<-runs2%>%
+    filter(Label==runLabel,Scheduled==TRUE)%>%
+    dplyr::group_by(p)%>%
+    dplyr::summarise(n=n())%>%
+    dplyr::ungroup()%>%
+    dplyr::arrange(n)
+  
+  iterations_to_run<-runs2%>%
+    filter(Label==runLabel,Scheduled==TRUE,DeviceToRun==device_name)%>%
+    dplyr::arrange(desc(p))%>%
+    dplyr::group_by(p)%>%
+    dplyr::arrange(desc(alt))%>%
+    dplyr::ungroup()%>%
+    dplyr::rename(i=Iteration)%>%
+    dplyr::filter(p%in%p_summ$p[1:n_p_used])%>%
+    dplyr::select(alt,p,i)%>%
+    # left_join(alternatives%>%dplyr::select(alt,ExpectedTimeMins))%>%
+    dplyr::ungroup()
+  # pull(Iteration)
+  
+}else{
+  
+  n_p_used<-1e3   
+  
+  p_summ<-prior_rng%>%
+    # filter(Label==runLabel,Scheduled==TRUE)%>%
+    dplyr::group_by(p)%>%
+    dplyr::summarise(n=n())%>%
+    dplyr::ungroup()%>%
+    dplyr::arrange(desc(n))
+  
+  iterations_to_run<-prior_rng%>%
+    dplyr::arrange(desc(p))%>%
+    dplyr::group_by(p)%>%
+    dplyr::arrange(desc(alt))%>%
+    dplyr::filter(p%in%p_summ$p[1:n_p_used])%>%
+    dplyr::select(alt,p,i)%>%
+    # left_join(alternatives%>%dplyr::select(alt,ExpectedTimeMins))%>%
+    dplyr::ungroup()
+  # %>%
+  # dplyr::pull(i)
+}
+
+if(nrow(iterations_to_run)<model_pars$sim$clusters_to_run & model_pars$sim$parallel_across_runs){
+  stop("More clusters than iterations")
+  # iterations_to_run<-iterations_to_run[nrow(length(iterations_to_run),model_pars$sim$clusters_to_run),]
+}
+
+cat(paste0("\n running a model for ",model_pars$sim$n_years,
+           " time steps",
+           # length(spatial_info_list[[1]]$small$valid_cells),
+           ", for ",nrow(iterations_to_run)," runs,",
+           ifelse(model_pars$sim$parallel_across_runs,paste0(" in parallel using ",model_pars$sim$clusters_to_run," nodes"),
+                  "sequentially"),
+           "\n"))
+
+
+if(model_pars$sim$parallel_across_runs){
+  
+  require(parallel)
+  
+  model_pars$sim$print_crit<-Inf # remove printing outcomes - wont show up anyway
+  
+  # Define batch size (number of runs per node before restarting)
+  batch_size <- model_pars$sim$batching_clusters * model_pars$sim$clusters_to_run
+  
+  iterations_to_run<-iterations_to_run%>%
+    dplyr::group_by(p)%>%
+    dplyr::mutate(n=n(),dummy=1)%>%
+    dplyr::ungroup()%>%
+    dplyr::arrange(n,p,alt)
+  # Split iterations into batches of batch_size
+  
+  iterations_to_run_bkp<-iterations_to_run
+  
+  all_batches<-split_evenly_by_col(df = iterations_to_run,
+                                   n_groups = ceiling(nrow(iterations_to_run_bkp)/model_pars$sim$batching_clusters),
+                                   target_col = "dummy")
+  
+  batch_summ<-plyr::rbind.fill(all_batches)%>%
+    dplyr::group_by(group)%>%
+    # dplyr::summarise(time=sum(ExpectedTimeMins))%>%
+    # dplyr::ungroup()%>%
+    # arrange(desc(time))%>%
+    dplyr::ungroup()
+    
+  batch_summ$batch<-ceiling(seq_along(batch_summ$group)/model_pars$sim$clusters_to_run)
+  iteration_batches<-list()
+  for(b in unique(batch_summ$batch)){
+    
+    groups_idx<-batch_summ%>%
+      dplyr::filter(batch==b)%>%
+      pull(group)
+    
+    iteration_batches[[b]]<-lapply(all_batches[groups_idx],function(x){x%>%dplyr::arrange(n)})
+    names(iteration_batches[[b]])<-NULL
+  }
+  
+  # Loop through each batch
+  for (batch_index in seq_along(iteration_batches)) {
+    
+    # batch <- iteration_batches[[batch_index]]
+    # 
+    
+    sub_batches<-iteration_batches[[batch_index]]
+    cluster_size<-min(model_pars$sim$clusters_to_run, length(sub_batches))
+  
+      iteration_chunks <- lapply(sub_batches,function(x){sample(x$i)})
+    
+    # Split current batch among nodes
+    cat(paste0("\nStarting batch ", batch_index, " at ", lubridate::now(), "\n"))
+    
+    # Start a new cluster for each batch
+    cl <- makeCluster(cluster_size)
+    
+    # Initialize cluster with required functions and data
+    invisible(clusterEvalQ(cl, {
+      
+      source("packageLoader.R")
+      source("functionLoader.R")
+      
+      devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/phd_experimental_functions.R")
+      devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/Quick%20Functions.R")
+      
+      token <- readRDS(".tokens/token.rds")
+      drive_auth(token = token)
+      
+      con <- file(nullfile(), open = "w")
+      sink(con, type = "message")    
+    }))
+    
+    # Assign objects to cluster
+    cat("\n Passing objects to nodes\n")
+    clusterExport(cl, varlist = c(
+                                  "model_pars",
+                                  "prior_rng"))
+    
+    
+    cat("\nStarting parallel execution for batch", batch_index, "\n")
+    
+    # Run in parallel
+    parLapply(cl = cl, iteration_chunks, fun = function(chunk_items) {
+      
+      j <- 1
+      for (cc in seq_along(chunk_items)) {
+        i <- chunk_items[cc]
+        start. <- lubridate::now()
+        source("./Parameters/pars_postPriorSampling.R", local = T)
+      
+        p <- prior_rng$p[i]
+        set.seed(p + 50)
+        
+        # input <- initialise_population(model_pars = model_pars,
+                                       # spatial_info = spatial_info,
+                                       # sir_structure = model_pars$bio$epi$sqpv_model,
+                                       # release_schedule = release_schedule_strats[[all_iterations$Strategy_Name[i]]],
+                                       # prop_sqpv_cells = model_pars$sim$prop_sqpv_cells,
+                                       # prop_infected = model_pars$sim$prop_infected_gs,
+                                       # prop_recovered = model_pars$sim$prop_recovered_gs)
+        
+        # input$mgmt$alts <- alternatives[all_iterations$alt[i],]
+        # start_conditions <- list(spatial_info = spatial_info, input = input)
+        
+        set.seed(p + 50)
+        # output <- run_population_model_optm(start_conditions = start_conditions,
+                                            # model_pars = model_pars, cl = NULL)
+        output$run_pars <- all_iterations[i,]
+        output$run_label <- all_iterations$Label[i]
+        
+        # Save output
+        filename_output <- paste0("./Results/", output$run_label, "_Resu_", zero_pad(i, 5), ".RData")
+        save(output, file = filename_output)
+        
+        # Remove unnecessary variables
+        # remove_variables_everywhere(c("trans_arr", "pars", "global_pars", "pop", "trans_emm", "trans_imm"))
+        
+        j <- j + 1
+      }
+      
+      return(j)
+    })
+    
+    # Stop the cluster after each batch
+    cat("\nStopping cluster for batch", batch_index, "\n")
+    stopCluster(cl)
+    
+    # Garbage collection to free memory before next batch
+    gc()
+  }
+  
+  cat("\nAll batches completed at ", lubridate::now(), "\n")
+  
+  
+}else{
+  
+  
+}
 
 init_pop<-init_population(pars)
 init_pop<-pairing(pop=init_pop,currentT = 0,pars=pars)
 pop<-init_pop
 
-# for( i in 1:nrow(prior_rng)){
+
+
 i<-1
+# for( i in 1:nrow(prior_rng)){
 source("./Parameters/pars_postPriorSampling.R")
 
 start_conditions<-list(init_pop=pop)

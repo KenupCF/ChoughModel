@@ -10,14 +10,21 @@ calculate_kinship <- function(pop_df, pars) {
     dplyr::filter(!duplicated(id)) %>%
     dplyr::select(id, mother_id, father_id, sex)
   
+  # remove individuals with no descendants
+  ped_df<-ped_df%>%
+    dplyr::filter(id%in%unique(c(ped_df$mother_id,ped_df$father_id)))
+  
   # Create pedigree object using the 'kinship2' package's pedigree function
   ped <- with(ped_df, pedigree(id = id, momid = mother_id, dadid = father_id, sex = ifelse(sex == "M", 1, 2)))
   
   # Calculate kinship matrix from the pedigree
   kin <- kinship(ped)
   
+  
+  f_ids<-pars$founder_ids[pars$founder_ids%in%ped_df$id]
+  
   # Override kinship values for founders with user-provided values
-  kin[pars$founder_ids, pars$founder_ids] <- pars$founder_kinship
+  kin[f_ids, f_ids] <- pars$founder_kinship
   
   # The following commented section creates all possible dam × sire combinations
   # and calculates their kinship, accounting for founder kinship.
@@ -99,13 +106,14 @@ calculate_inbreeding <- function(pop_df, pars) {
     dplyr::filter(is.na(Fi)) %>%
     dplyr::mutate(priority = 2)  # Mark as needing estimation
   
-  
+  if(nrow(missing_Fi)>0){
   id_filter<-missing_Fi%>%
     dplyr::filter(!duplicated(data.frame(mother_id,father_id)))%>%
     dplyr::select(mother_id,father_id)
   
+  
   # Get kinship matrix using the earlier function
-  kin <- calculate_kinship(pop_df = pop_df, pars = pars,id_filter=id_filter)
+  kin <- calculate_kinship(pop_df = pop_df, pars = pars)
   
   # Lookup kinship between each individual's parents
   parent_kin <- kin[missing_Fi$mother_id, missing_Fi$father_id] %>% diag()
@@ -134,7 +142,7 @@ calculate_inbreeding <- function(pop_df, pars) {
   
   # Assign calculated Fi back to missing individuals
   missing_Fi$Fi <- Fi
-  
+  }
   # Combine estimated and original individuals; mark all with t = -1
   new <- plyr::rbind.fill(temp, missing_Fi) %>%
     mutate(t = -1)
@@ -149,3 +157,12 @@ calculate_inbreeding <- function(pop_df, pars) {
 }
 
 
+# Function to calculate kinship between two individuals
+get_kinship_pair <- function(id1, id2, ped) {
+  kin_mat <- kinship(ped, ids = c(id1, id2))
+  return(kin_mat[id1, id2])
+}
+
+
+# subset_ids <- unique(c(id_filter$mother_id, id_filter$father_id))
+# partial_kin <- kinship(ped, ids = subset_ids)

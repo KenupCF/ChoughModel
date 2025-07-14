@@ -674,6 +674,43 @@ releases<-function(pars,currentT){
 }
 
 
+replace_na_characters <- function(df) {
+  df[] <- lapply(df, function(col) {
+    if (is.character(col)) {
+      col[is.na(col)] <- ""
+    }
+    return(col)
+  })
+  return(df)
+}
+
+split_evenly_by_col <- function(df, n_groups, target_col) {
+  library(dplyr)
+  
+  df <- df %>%
+    arrange(desc(!!sym(target_col)))  # Sort by descending target column value
+  
+  # Initialize groups
+  group_sums <- rep(0, n_groups)
+  df$group <- NA  # Column to store group assignment
+  
+  for (i in 1:nrow(df)) {
+    # Find the group with the smallest current sum
+    min_group <- which.min(group_sums)
+    
+    # Assign the current row to that group
+    df$group[i] <- min_group
+    
+    # Update the sum of that group
+    group_sums[min_group] <- group_sums[min_group] + df[[target_col]][i]
+  }
+  
+  # Split into a list of sub-dataframes
+  split_list <- split(df, df$group)
+  
+  return(split_list)
+}
+
 
 
 
