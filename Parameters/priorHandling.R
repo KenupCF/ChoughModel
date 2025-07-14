@@ -25,17 +25,23 @@ prior_rng$bl_fst_yr_surv_C<-qFUN$`surv C_1`(x = prior_rng$Q_bl_surv)%>%adjust_su
 prior_rng$bl_fst_yr_surv_D<-qFUN$`surv D_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)
 prior_rng$bl_fst_yr_surv_E<-qFUN$`surv E_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)
 
+prior_rng$bl_fst_yr_surv_sd_A<-qFUN$`surv sd_A_1`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_fst_yr_surv_sd_B<-qFUN$`surv sd_B_1`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_fst_yr_surv_sd_C<-qFUN$`surv sd_C_1`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_fst_yr_surv_sd_D<-qFUN$`surv sd_D_1`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_fst_yr_surv_sd_E<-qFUN$`surv sd_E_1`(x=prior_rng$Q_bl_surv_sd)
+
 prior_rng$bl_sad_surv_A<-qFUN$`surv A_2`(x = prior_rng$Q_bl_surv)
 prior_rng$bl_sad_surv_B<-qFUN$`surv B_2`(x = prior_rng$Q_bl_surv)
 prior_rng$bl_sad_surv_C<-qFUN$`surv C_2`(x = prior_rng$Q_bl_surv)
 prior_rng$bl_sad_surv_D<-qFUN$`surv D_2`(x = prior_rng$Q_bl_surv)
 prior_rng$bl_sad_surv_E<-qFUN$`surv E_2`(x = prior_rng$Q_bl_surv)
 
-prior_rng$bl_ad_surv_A<-qFUN$`surv A_ad`(x = prior_rng$Q_bl_surv)
-prior_rng$bl_ad_surv_B<-qFUN$`surv B_ad`(x = prior_rng$Q_bl_surv)
-prior_rng$bl_ad_surv_C<-qFUN$`surv C_ad`(x = prior_rng$Q_bl_surv)
-prior_rng$bl_ad_surv_D<-qFUN$`surv D_ad`(x = prior_rng$Q_bl_surv)
-prior_rng$bl_ad_surv_E<-qFUN$`surv E_ad`(x = prior_rng$Q_bl_surv)
+prior_rng$bl_sad_surv_sd_A<-qFUN$`surv sd_A_2`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_sad_surv_sd_B<-qFUN$`surv sd_B_2`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_sad_surv_sd_C<-qFUN$`surv sd_C_2`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_sad_surv_sd_D<-qFUN$`surv sd_D_2`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_sad_surv_sd_E<-qFUN$`surv sd_E_2`(x=prior_rng$Q_bl_surv_sd)
 
 prior_rng$bl_ad_surv_A<-qFUN$`surv A_ad`(x = prior_rng$Q_bl_surv)
 prior_rng$bl_ad_surv_B<-qFUN$`surv B_ad`(x = prior_rng$Q_bl_surv)
@@ -43,11 +49,32 @@ prior_rng$bl_ad_surv_C<-qFUN$`surv C_ad`(x = prior_rng$Q_bl_surv)
 prior_rng$bl_ad_surv_D<-qFUN$`surv D_ad`(x = prior_rng$Q_bl_surv)
 prior_rng$bl_ad_surv_E<-qFUN$`surv E_ad`(x = prior_rng$Q_bl_surv)
 
-prior_rng$bl_brood_size_A<-qFUN$brood_A(x = prior_rng$Q_bl_brood) %>% log
-prior_rng$bl_brood_size_B<-qFUN$brood_B(x = prior_rng$Q_bl_brood) %>% log
-prior_rng$bl_brood_size_C<-qFUN$brood_C(x = prior_rng$Q_bl_brood) %>% log
-prior_rng$bl_brood_size_D<-qFUN$brood_D(x = prior_rng$Q_bl_brood) %>% log
-prior_rng$bl_brood_size_E<-qFUN$brood_E(x = prior_rng$Q_bl_brood) %>% log
+# prior_rng$bl_ad_surv_A<-qFUN$`surv A_ad`(x = prior_rng$Q_bl_surv)
+# prior_rng$bl_ad_surv_B<-qFUN$`surv B_ad`(x = prior_rng$Q_bl_surv)
+# prior_rng$bl_ad_surv_C<-qFUN$`surv C_ad`(x = prior_rng$Q_bl_surv)
+# prior_rng$bl_ad_surv_D<-qFUN$`surv D_ad`(x = prior_rng$Q_bl_surv)
+# prior_rng$bl_ad_surv_E<-qFUN$`surv E_ad`(x = prior_rng$Q_bl_surv)
+
+prior_rng$bl_ad_surv_sd_A<-qFUN$`surv sd_A_ad`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_ad_surv_sd_B<-qFUN$`surv sd_B_ad`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_ad_surv_sd_C<-qFUN$`surv sd_C_ad`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_ad_surv_sd_D<-qFUN$`surv sd_D_ad`(x=prior_rng$Q_bl_surv_sd)
+prior_rng$bl_ad_surv_sd_E<-qFUN$`surv sd_E_ad`(x=prior_rng$Q_bl_surv_sd)
+
+
+prior_rng$bl_brood_size_A<-qFUN$brood_A(x = prior_rng$Q_bl_brood) 
+prior_rng$bl_brood_size_B<-qFUN$brood_B(x = prior_rng$Q_bl_brood) 
+prior_rng$bl_brood_size_C<-qFUN$brood_C(x = prior_rng$Q_bl_brood) 
+prior_rng$bl_brood_size_D<-qFUN$brood_D(x = prior_rng$Q_bl_brood) 
+prior_rng$bl_brood_size_E<-qFUN$brood_E(x = prior_rng$Q_bl_brood) 
+
+prior_rng$bl_brood_size_sd_A<-qFUN$sd_brood_A(x = prior_rng$Q_bl_brood_sd) 
+prior_rng$bl_brood_size_sd_B<-qFUN$sd_brood_B(x = prior_rng$Q_bl_brood_sd) 
+prior_rng$bl_brood_size_sd_C<-qFUN$sd_brood_C(x = prior_rng$Q_bl_brood_sd) 
+prior_rng$bl_brood_size_sd_D<-qFUN$sd_brood_D(x = prior_rng$Q_bl_brood_sd) 
+prior_rng$bl_brood_size_sd_E<-qFUN$sd_brood_E(x = prior_rng$Q_bl_brood_sd) 
+
+
 
 ## -----------------------------
 ## Habitat improvement forecasting

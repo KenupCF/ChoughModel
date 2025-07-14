@@ -51,6 +51,7 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
   
   # Check that required mortality parameter is provided
   needed_pars <- c("phi_df","max_age","improved_foraging",
+                   "start_cycle",
                    "dip_leth_eq",
                    "carr_capac_df",
                    "acc_period_df","release_year_cont","supp_feeding_df","full_pop")
@@ -89,9 +90,23 @@ mortality_aging <- function(pop, currentT, pars,seed=19) {
   # ib_df<-calculate_inbreeding(pop = pars$full_pop,pars=pars)
   
   # Assign constant survival probability
+  
+  # environmental stochasticity (random increases throughout all parameters)
+  # cyclcical variation
+  set.seed(seed+1)
+  q_sample<-runif(n = 1,min = 0,max = 1)
+  
+  surv_mean<-mean<-current$Beta0
+  cyc_var <- current$Beta0_sd_cyc*sin(pi*(currentT+pars$start_cycle)/2.5)
+  sto_var<- sapply(seq_along(current$id),function(i){
+    qnorm(p = q_sample,mean = 0,sd=current$Beta0_sd_sto[i])})
+  
+  surv_int<- surv_mean + sto_var + cyc_var
+    
+  
   surv <-
           ### Calculate survival based on habitat conditions
-          inv.logit(current$Beta0 + 
+          inv.logit(surv_int + 
                     current$Beta_sf * current$sf +
                     current$Beta_if * pars$improved_foraging[currentT] +
                     current$Beta_b  * current$sf * pars$improved_foraging[currentT]
@@ -316,7 +331,21 @@ recruitment <- function(pop, currentT, pars, seed = 19) {
     dplyr::mutate(B0=NULL,Beta_sf=NULL,Beta_if=NULL,Beta_b=NULL)%>%
     dplyr::left_join(pars$brood_size_df)
   
-  brood_size <- exp(reproducing$B0+
+  
+  set.seed(seed+1)
+  q_sample<-runif(n = 1,min = 0,max = 1)
+  
+  bs_mean<-reproducing$B0
+  
+  bs_st_var<-sapply(seq_along(reproducing$id),function(i){
+    qnorm(p = q_sample,mean = 0,sd=reproducing$B0_sd[i])
+    })
+  
+  bs_int <- bs_mean + bs_st_var
+  # bs_int <- pmax(bs_int,0)
+  # bs_int <- log(bs_int)
+  
+  brood_size <- exp(bs_int+
                       reproducing$Beta_sf * reproducing$sf +
                       reproducing$Beta_if * pars$improved_foraging[currentT]+
                       reproducing$Beta_b  * reproducing$sf * pars$improved_foraging[currentT] +
@@ -572,8 +601,8 @@ calculate_inbreeding <- function(pop, initial_inb = NULL) {
 
 adjust_probability <- function(prob, odds_ratio,prop=1) {
   
-  if (any(prob <= 0) || any(prob >= 1)) {
-    warning("Probability must be between 0 and 1 (exclusive).")
+  if (any(prob < 0) || any(prob > 1)) {
+    stop("Probability must be between 0 and 1 (inclusive).")
   }
   
   if (any(odds_ratio <= 0)) {
@@ -643,105 +672,6 @@ releases<-function(pars,currentT){
   return(released)
   
 }
-
-calculate_kinship <- function(pop_df, pars) {
-  
-  # Specify required parameters
-  needed_pars <- c("founder_ids", "founder_kinship")
-  
-  # Prepare pedigree dataframe by selecting relevant columns and removing duplicates
-  ped_df <- pop_df %>%
-    dplyr::filter(!duplicated(id)) %>%
-    dplyr::select(id, mother_id, father_id, sex)
-  
-  # Create pedigree object using the 'kinship2' package's pedigree function
-  ped <- with(ped_df, pedigree(id = id, momid = mother_id, dadid = father_id, sex = ifelse(sex == "M", 1, 2)))
-  
-  # Calculate kinship matrix from the pedigree
-  kin <- kinship(ped)
-  
-  # Override kinship values for founders with user-provided values
-  kin[pars$founder_ids, pars$founder_ids] <- pars$founder_kinship
-  
-  # The following commented section creates all possible dam × sire combinations
-  # and calculates their kinship, accounting for founder kinship.
-  # It has been commented out but may be useful for specific mating evaluations.
-  
-  return(kin)
-}
-
-
-calculate_inbreeding <- function(pop_df, pars) {
-  
-  # Specify required parameters
-  needed_pars <- c("founder_ids", "Fp")
-  
-  # Get kinship matrix using the earlier function
-  kin <- calculate_kinship(pop_df = pop_df, pars = pars)
-  
-  # Prepare the main population dataframe
-  temp <- pop_df %>%
-    dplyr::arrange(is.na(Fi))%>%
-    dplyr::filter(!duplicated(id)) %>%
-    dplyr::mutate(
-      # Assign founder inbreeding if missing and listed as a founder
-      Fi = case_when(
-        is.na(Fi) & id %in% pars$founder_ids ~ pars$Fp,
-        # Assign Fi = 0 for individuals with no known parents and not in founder_ids
-        is.na(Fi) & is.na(mother_id) & is.na(father_id) ~ 0,
-        # Otherwise keep existing Fi
-        TRUE ~ Fi
-      ),
-      priority = 1,  # Used later to track original vs. imputed entries
-      t = NULL       # Remove any existing 't' variable
-    )
-  
-  # Extract individuals still missing Fi
-  missing_Fi <- temp %>%
-    dplyr::filter(is.na(Fi)) %>%
-    dplyr::mutate(priority = 2)  # Mark as needing estimation
-  
-  # Lookup kinship between each individual's parents
-  parent_kin <- kin[missing_Fi$mother_id, missing_Fi$father_id] %>% diag()
-  
-  # Extract Fi for fathers of missing individuals
-  Fdad <- temp %>%
-    dplyr::filter(!is.na(Fi), sex == "M") %>%
-    dplyr::pull(Fi)
-  names(Fdad) <- temp %>%
-    dplyr::filter(!is.na(Fi), sex == "M") %>%
-    dplyr::pull(id)
-  Fdad <- Fdad[missing_Fi$father_id]
-  
-  # Extract Fi for mothers of missing individuals
-  Fmom <- temp %>%
-    dplyr::filter(!is.na(Fi), sex == "F") %>%
-    dplyr::pull(Fi)
-  names(Fmom) <- temp %>%
-    dplyr::filter(!is.na(Fi), sex == "F") %>%
-    dplyr::pull(id)
-  Fmom <- Fmom[missing_Fi$mother_id]
-  
-  # Estimate inbreeding coefficients using standard formula:
-  # Fi = (Fi_mother + Fi_father)/2 + kin(mother, father) * (1 - (Fi_mother + Fi_father)/2)
-  Fi <- ((Fdad + Fmom) / 2) + (parent_kin * (1 - ((Fdad + Fmom) / 2)))
-  
-  # Assign calculated Fi back to missing individuals
-  missing_Fi$Fi <- Fi
-  
-  # Combine estimated and original individuals; mark all with t = -1
-  new <- plyr::rbind.fill(temp, missing_Fi) %>%
-    mutate(t = -1)
-  
-  # Clean and return output using tidy_pop_df
-  resu <- tidy_pop_df(new) %>%
-  dplyr::select(id,Fi)
-  
-  if(any(is.na(resu$Fi))){stop("Some Fi's not calculated")}
-  
-  return(resu)
-}
-
 
 
 

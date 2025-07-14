@@ -24,6 +24,7 @@ source("./Parameters/SimPars.R")
 source("./Parameters/BioPars.R")
 source("./Parameters/MgmtPars.R")
 source("./Functions/FUN.R")
+source("./Functions/FUNgen.R")
 
   
 pars<-list(StartN=StartN,
@@ -36,22 +37,20 @@ pars<-list(StartN=StartN,
            Fp=model_pars$bio$gen$starting_inbreeding)
 
 
-
-
 ### Sample uncertain parameters, given the description of their distribution
 prior_rng<-priorSampling(model_pars$priors,
                          seed = 26051991,
-                         # size=2)%>%
-                         size=model_pars$sim$n_iter)%>%
+                         size=1e3)%>%
+                         # size=model_pars$sim$n_iter)%>%
   dplyr::mutate(p = 1:n())
 
 source("./Parameters/priorHandling.R")
 
 mgmt_options<-expand.grid(SuppFeed=c(
-  # "No",
+  "No",
   "Current"
-  # ,"Provisional"
-  ),ReleaseStrat=rel_strat_test$r)%>%
+  ,"Provisional"
+  ),ReleaseStrat=rel_strats$r)%>%
   dplyr::mutate(a=1:n())
 
 prior_rng<-merge(prior_rng,mgmt_options)%>%
@@ -73,42 +72,13 @@ model_pars$mgmt$supp_feeding_df<-model_pars$mgmt$supp_feeding_master[[prior_rng$
 model_pars$mgmt$release_schedule<-model_pars$mgmt$release_schedule_master%>%
   dplyr::filter(r==prior_rng$ReleaseStrat[i])
 
-### wrap this into a model function  
-  
-suppressMessages({
-for(j in 1:50){
-
-pars$all_ids<-unique(pop$id)
-  
-currentPop0<-pop%>%
-  dplyr::filter(t==j-1,alive)%>%
-  dplyr::mutate(t=j)
-  
-currentPop1<-mortality_aging(pop=currentPop0,currentT = j,pars=pars)
-  
-currentPop2<-unpair_if_dead(pop=currentPop1,currentT = j)
-
-currentPop3<-pairing(pop=currentPop2,currentT = j,pars=pars)
-
-currentPop4<-recruitment(pop=currentPop3,currentT = j,pars=pars)
-
-currentPop5<-dispersal(pop=currentPop4,currentT = j,pars=pars)
-
-
-pop<-plyr::rbind.fill(pop,currentPop5)
+# profvis({
+resu<-run_model(start_conditions=start_conditions,model_pars=model_pars)
+# })
 
 
 
-}
-})
-  
-}
-pedigree_df <- pop %>%
-  dplyr::filter(!duplicated(id))%>%
-  dplyr::select(id, mother_id, father_id,sex)
-
-
-pop%>%
+resu%>%
   dplyr::group_by(t)%>%
   dplyr::summarise(N=sum(alive))%>%
   dplyr::pull(N)%>%

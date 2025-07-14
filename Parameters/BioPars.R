@@ -8,6 +8,7 @@ model_pars$bio$gen$founder_kinship<-0.1
 
 model_pars$priors$diploid_eq<-data.frame(min=3,max=15,dist="unif")
 
+subpops<-LETTERS[1:5]
 
 NoAgeClasses<-3
 
@@ -30,7 +31,7 @@ dispersalMat <- matrix(c(
   10, 5, 15, 5, 65
 ), nrow = 5, byrow = TRUE)/100
 
-rownames(dispersalMat) <- colnames(dispersalMat) <- c("A", "B", "C", "D", "E")
+rownames(dispersalMat) <- colnames(dispersalMat) <- subpops
 
 model_pars$bio$dispersalMat<-dispersalMat
 
@@ -139,17 +140,33 @@ mort_long_sd <- mort_long_sd %>%
   dplyr::select(subpop, age_class, mortality_sd)
 
 
-mort_long<-left_join(mort_long,mort_long_sd)%>%
+survival_df<-left_join(mort_long,mort_long_sd)%>%
   dplyr::mutate(survival=1-mortality)%>%
-  dplyr::mutate(mortality_logit = logit(mortality),
+  dplyr::mutate(
+                mortality_logit = logit(mortality),
                 mortality_logit_sd = ((1 / (mortality * (1 - mortality)))^2)*(mortality_sd^2))%>%
-  dplyr::mutate(mean=mortality_logit,sd=mortality_logit_sd,par=paste(subpop,age_class,sep="_"),dist="norm")%>%
+  dplyr::mutate(
+      mean=mortality_logit,
+      sd=mortality_logit_sd,
+      par=paste(subpop,age_class,sep="_"),dist="norm")%>%
   dplyr::mutate(mean=-mean)%>%
   dplyr::select(mean,sd,dist,par)
 
+survival_sd_df<-survival_df%>%
+  dplyr::mutate(mean=sd,sd=0,par=paste0("sd_",par))
+
+
+survival_df<-survival_df%>%
+  dplyr::mutate(sd=0)
+
+
+
 ### create distribution descriptions for each age class / subpopulation
-dists<-split(mort_long,mort_long$par)
-names(dists)<-paste("surv",mort_long$par)
+dists<-split(survival_df,survival_df$par)
+names(dists)<-paste("surv",survival_df$par)
+
+dists_sd<-split(survival_sd_df,survival_sd_df$par)
+names(dists_sd)<-paste("surv",survival_sd_df$par)
 
 for(d in seq_along(dists)) {
   
@@ -157,10 +174,22 @@ for(d in seq_along(dists)) {
   dist_mean <- dists[[d]]$mean
   dist_sd <- dists[[d]]$sd
   dist_name <- names(dists)[d]
+
+  dist_sd_mean <- dists_sd[[d]]$mean
+  dist_sd_sd   <- dists_sd[[d]]$sd
+  dist_sd_name <- names(dists_sd)[d]
   
   qFUN[[dist_name]] <- local({
     m <- dist_mean
     s <- dist_sd
+    function(x) {
+      qnorm(p = x, mean = m, sd = s)
+    }
+  })
+  
+  qFUN[[dist_sd_name]] <- local({
+    m <- dist_sd_mean
+    s <- dist_sd_sd
     function(x) {
       qnorm(p = x, mean = m, sd = s)
     }
@@ -195,15 +224,23 @@ brood_df <- data.frame(
 # For log-normal: log(mean^2 / sqrt(sd^2 + mean^2)) and sqrt(log(1 + (sd^2 / mean^2)))
 brood_df <- brood_df %>%
   mutate(
-    # meanlog = log(mean^2 / sqrt(sd^2 + mean^2)),
-    # sdlog = sqrt(log(1 + (sd^2 / mean^2))),
+    sd = sqrt(log(1 + (sd^2 / mean^2))),
+    mean = log(mean),
     par = paste0("brood_", subpop),
     dist = "norm"
   ) %>%
   dplyr::select(mean, sd, dist, par)
 
+
+brood_sd_df<-brood_df%>%
+  dplyr::mutate(mean=sd,sd=0,par=paste0("sd_",par))
+
+brood_df<-brood_df%>%
+  dplyr::mutate(sd=0)
+
 # Step 3: Create named list of distribution rows
 brood_dists <- split(brood_df, brood_df$par)
+brood_sd_dists <- split(brood_sd_df, brood_sd_df$par)
 
 # Step 4: Add quantile functions to qFUN
 for (d in seq_along(brood_dists)) {
@@ -213,6 +250,11 @@ for (d in seq_along(brood_dists)) {
   dist_sd <- brood_dists[[d]]$sd
   dist_name <- names(brood_dists)[d]
   
+  dist_mean_sd <- brood_sd_dists[[d]]$mean
+  dist_sd_sd   <- brood_sd_dists[[d]]$sd
+  dist_name_sd <- names(brood_sd_dists)[d]
+  
+  
   qFUN[[dist_name]] <- local({
     m <- dist_mean
     s <- dist_sd
@@ -220,9 +262,16 @@ for (d in seq_along(brood_dists)) {
       qnorm(p = x, mean = m, sd = s)
     }
   })
+  
+  qFUN[[dist_name_sd]] <- local({
+    m <- dist_mean_sd
+    s <- dist_sd_sd
+    function(x) {
+      qnorm(p = x, mean = m, sd = s)
+    }
+  })
 }
 }
-
 
 
 

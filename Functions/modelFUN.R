@@ -1,4 +1,6 @@
 run_model<-function(start_conditions,model_pars){
+
+  library(profvis)
   
   start.<-now()
   n_years<-model_pars$sim$n_years
@@ -7,6 +9,8 @@ run_model<-function(start_conditions,model_pars){
   pars<-list()
   
   pars$all_ids<-unique(pop$id)
+  
+  pars$start_cycle<-model_pars$sim$start_cycle
   
   pars$max_age<-model_pars$bio$inherent$max_age
   pars$breeding_age<-model_pars$bio$inherent$age_first_breed
@@ -54,9 +58,9 @@ run_model<-function(start_conditions,model_pars){
   pars$founder_ids<-unique(pop$id)
   
   j<-1
-  
-  # while(j <= n_years){
-  while(j <= 8){
+  suppressMessages({
+  while(j <= n_years){
+  # while(j <= 35){
       
     pars$all_ids<-unique(pop$id)
     
@@ -92,9 +96,12 @@ run_model<-function(start_conditions,model_pars){
     
     
     
-    print(j)
+    # print(j)
   j<-j+1
+  
   }
-  # })
+  })
+  
+  return(list(pop=pop,time_run=difftime(time1 = now(),time2 = start.,units = "secs")))
   
 }

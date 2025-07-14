@@ -6,6 +6,8 @@ model_pars$priors$Q_habitat_effect_size    <- qrunif_template
 
 model_pars$priors$Q_bl_surv                <- qrunif_template
 model_pars$priors$Q_bl_brood               <- qrunif_template
+model_pars$priors$Q_bl_surv_sd             <- qrunif_template
+model_pars$priors$Q_bl_brood_sd            <- qrunif_template
 model_pars$priors$Q_bl_nest                <- qrunif_template
 
 model_pars$priors$Q_improved_foraging      <- qrunif_template

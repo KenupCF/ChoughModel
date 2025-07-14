@@ -58,6 +58,13 @@ model_pars$bio$surv_coeff <-
           prior_rng$bl_fst_yr_surv_D[i],
           prior_rng$bl_fst_yr_surv_E[i]
         ),
+        Beta0_sd = c(
+          prior_rng$bl_fst_yr_surv_sd_A[i],
+          prior_rng$bl_fst_yr_surv_sd_B[i],
+          prior_rng$bl_fst_yr_surv_sd_C[i],
+          prior_rng$bl_fst_yr_surv_sd_D[i],
+          prior_rng$bl_fst_yr_surv_sd_E[i]
+        ),
         subpop = LETTERS[1:5],
         age = 1
       ),
@@ -71,6 +78,13 @@ model_pars$bio$surv_coeff <-
           prior_rng$bl_sad_surv_D[i],
           prior_rng$bl_sad_surv_E[i]
         ),
+        Beta0_sd = c(
+          prior_rng$bl_sad_surv_sd_A[i],
+          prior_rng$bl_sad_surv_sd_B[i],
+          prior_rng$bl_sad_surv_sd_C[i],
+          prior_rng$bl_sad_surv_sd_D[i],
+          prior_rng$bl_sad_surv_sd_E[i]
+        ),
         subpop = LETTERS[1:5],
         age = 2
       ),
@@ -83,6 +97,13 @@ model_pars$bio$surv_coeff <-
           prior_rng$bl_ad_surv_C[i],
           prior_rng$bl_ad_surv_D[i],
           prior_rng$bl_ad_surv_E[i]
+        ),
+        Beta0_sd = c(
+          prior_rng$bl_ad_surv_sd_A[i],
+          prior_rng$bl_ad_surv_sd_B[i],
+          prior_rng$bl_ad_surv_sd_C[i],
+          prior_rng$bl_ad_surv_sd_D[i],
+          prior_rng$bl_ad_surv_sd_E[i]
         ),
         subpop = LETTERS[1:5]
       ) %>%
@@ -145,7 +166,15 @@ model_pars$bio$surv_coeff<-model_pars$bio$surv_coeff%>%
   is.na(OR_release)~1,
   TRUE~OR_release
   ))%>%
-  dplyr::ungroup()
+  dplyr::ungroup()%>%
+  dplyr::mutate(Beta0_sd_cyc=case_when(
+    age==1~Beta0_sd/2,
+    TRUE~0
+  ),
+  Beta0_sd_sto=case_when(
+    age==1~Beta0_sd/2,
+    TRUE~Beta0_sd
+  ))
 
 
 
@@ -154,12 +183,18 @@ model_pars$bio$brood_size_coeff<-data.frame("Beta_sf"=prior_rng$b_brood_size_sup
                                             "Beta_b"=prior_rng$b_brood_size_imp_for_supp_feed[i])%>%
   merge(data.frame(subpop=subpops))%>%
   left_join(data.frame("B0"=c(
-    prior_rng$bl_brood_size_A[i],
-    prior_rng$bl_brood_size_B[i],
-    prior_rng$bl_brood_size_C[i],
-    prior_rng$bl_brood_size_D[i],
-    prior_rng$bl_brood_size_E[i]
-  ),subpop=subpops))
+      prior_rng$bl_brood_size_A[i],
+      prior_rng$bl_brood_size_B[i],
+      prior_rng$bl_brood_size_C[i],
+      prior_rng$bl_brood_size_D[i],
+      prior_rng$bl_brood_size_E[i]),
+      "B0_sd"=c(
+        prior_rng$bl_brood_size_sd_A[i],
+        prior_rng$bl_brood_size_sd_B[i],
+        prior_rng$bl_brood_size_sd_C[i],
+        prior_rng$bl_brood_size_sd_D[i],
+        prior_rng$bl_brood_size_sd_E[i]),
+      subpop=subpops))
 
 model_pars$bio$nest_succ_coeff<-data.frame("Beta_sf"=prior_rng$b_nest_succ_supp_feed[i],
                     "Beta_if"=prior_rng$b_nest_succ_imp_for[i],
@@ -196,6 +231,7 @@ model_pars$mgmt$prob_nest_aband<-prior_rng$prob_nest_aband[i]
 model_pars$mgmt$prob_for_imp <- prior_rng$prob_imp_for[i] 
 model_pars$mgmt$year_for_imp <- prior_rng$year_imp_for[i] 
 
+model_pars$sim$start_cycle<- round(prior_rng$start_cycle[i])
 
 
 startK
