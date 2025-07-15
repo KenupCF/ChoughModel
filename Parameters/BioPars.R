@@ -6,9 +6,14 @@ model_pars$bio$gene<-list()
 model_pars$bio$gen$starting_inbreeding<-0.1
 model_pars$bio$gen$founder_kinship<-0.1
 
-model_pars$priors$diploid_eq<-data.frame(min=3,max=15,dist="unif")
 
-subpops<-LETTERS[1:5]
+if(model_pars$sim$parametric_uncertainty){
+model_pars$priors$diploid_eq<-data.frame(min=3,max=15,dist="unif")
+}else{
+model_pars$priors$diploid_eq<-data.frame(min=7,max=7,dist="unif")
+}
+
+subpops<-model_pars$bio$subpops<-LETTERS[1:5]
 
 NoAgeClasses<-3
 
@@ -69,6 +74,12 @@ model_pars$bio$inherent$sex_ratio <-	0.5
 model_pars$bio$inherent$prop_fem_breed<-1
 model_pars$bio$inherent$prop_mal_breed<-1
 model_pars$bio$inherent$av_clutch_size<-4
+model_pars$bio$inherent$age_structure <- c(
+  0.285663936, 0.183075095, 0.132970019, 0.098160761, 0.074208916,
+  0.048653033, 0.038884003, 0.031301492, 0.027974704, 0.018496084,
+  0.013611135, 0.009851368, 0.007206196, 0.007697649, 0.007863388,
+  0.007421634, 0.006960587
+)
 
 #### Mortality handling
 {

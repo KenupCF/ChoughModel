@@ -1,13 +1,15 @@
 runLabel<-"toyV1"
-get_runs_from_gsheet<-TRUE
+get_runs_from_gsheet<-FALSE
 replace_runs_gsheet<-FALSE
 prior_rng_seed<-19910526
 
 source("packageLoader.R")
 source("functionLoader.R")
+devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/phd_experimental_functions.R")
+devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/Quick%20Functions.R")
+
 
 sheet_url <- "https://docs.google.com/spreadsheets/d/1dCIkkofz0h2s9MWOtZfNqAN4DKY59Z2IqNIWlM3isMY/edit?gid=903185379#gid=903185379"
-
 gs4_auth(path = "./.tokens/fresh-replica-344321-0e0618a3b5de.json")
 
 ### Acessing Google Drive
@@ -17,18 +19,16 @@ drive_auth(token = token)
 ### Get device name
 source(".tokens/setDeviceName.R")
 
-
-model_pars<-list(priors=list(),sim=list(),bio=list(),mgmt=list())
-
+### Import expert elicited info
 load("./Data/Expert_Elicitation_Aggregation.RData")
 
-devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/phd_experimental_functions.R")
-devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/Quick%20Functions.R")
-
+### Parameter setting
+model_pars<-list(priors=list(),sim=list(),bio=list(),mgmt=list())
 source("./Parameters/SimPars.R")
 source("./Parameters/BioPars.R")
 source("./Parameters/MgmtPars.R")
-  
+
+
 pars<-list(StartN=StartN,
            sex_ratio=0.5,
            no_age_classes=model_pars$bio$inherent$max_age,
@@ -36,6 +36,7 @@ pars<-list(StartN=StartN,
            breeding_age=model_pars$bio$inherent$age_first_breed,
            nesting_success_df=nest_success_df,
            dispersalMat=dispersalMat,
+           age_structure=model_pars$bio$inherent$age_structure,
            Fp=model_pars$bio$gen$starting_inbreeding)
 
 
@@ -46,16 +47,19 @@ prior_rng<-priorSampling(model_pars$priors,
                          size=model_pars$sim$n_iter)%>%
   dplyr::mutate(p = 1:n())
 
+
 source("./Parameters/priorHandling.R")
 
-mgmt_options<-expand.grid(SuppFeed=c(
-  "No",
-  "Current"
-  ,"Provisional"
-  ),ReleaseStrat=rel_strats$r)%>%
+
+# prior_rng$prob_imp_for<-1
+# prior_rng$year_imp_for<-1
+# prior_rng$diploid_eq<-0
+
+mgmt_options<-expand.grid(SuppFeed=c(model_pars$mgmt$supp_feed_opts),
+                          ReleaseStrat=model_pars$mgmt$release_schedule_master$r)%>%
   dplyr::mutate(alt=1:n())
 
-prior_rng<-merge(prior_rng,mgmt_options)%>%
+all_iterations<-merge(prior_rng,mgmt_options)%>%
   dplyr::arrange(p,alt)%>%
   dplyr::mutate(i=1:n(),Label=runLabel)
 
@@ -64,7 +68,7 @@ if(get_runs_from_gsheet | replace_runs_gsheet){
     replace_na_characters()
   
   runs2<-full_join(runs,
-                   prior_rng%>%
+                   all_iterations%>%
                      dplyr::mutate(Iteration=i)%>%
                      dplyr::select(Label,alt,Iteration,p)
                    # ,by=c("Label","Iteration"),all.x=TRUE,all.y=TRUE
@@ -107,14 +111,14 @@ if(get_runs_from_gsheet){
   
   n_p_used<-1e3   
   
-  p_summ<-prior_rng%>%
+  p_summ<-all_iterations%>%
     # filter(Label==runLabel,Scheduled==TRUE)%>%
     dplyr::group_by(p)%>%
     dplyr::summarise(n=n())%>%
     dplyr::ungroup()%>%
     dplyr::arrange(desc(n))
   
-  iterations_to_run<-prior_rng%>%
+  iterations_to_run<-all_iterations%>%
     dplyr::arrange(desc(p))%>%
     dplyr::group_by(p)%>%
     dplyr::arrange(desc(alt))%>%
@@ -139,9 +143,9 @@ cat(paste0("\n running a model for ",model_pars$sim$n_years,
                   "sequentially"),
            "\n"))
 
-
-if(model_pars$sim$parallel_across_runs){
-  
+# if(model_pars$sim$parallel_across_runs){
+if(FALSE){
+    
   require(parallel)
   
   model_pars$sim$print_crit<-Inf # remove printing outcomes - wont show up anyway
@@ -218,7 +222,7 @@ if(model_pars$sim$parallel_across_runs){
     cat("\n Passing objects to nodes\n")
     clusterExport(cl, varlist = c(
                                   "model_pars",
-                                  "prior_rng"))
+                                  "all_iterations"))
     
     
     cat("\nStarting parallel execution for batch", batch_index, "\n")
@@ -232,7 +236,7 @@ if(model_pars$sim$parallel_across_runs){
         start. <- lubridate::now()
         source("./Parameters/pars_postPriorSampling.R", local = T)
       
-        p <- prior_rng$p[i]
+        p <- all_iterations$p[i]
         set.seed(p + 50)
         
         # input <- initialise_population(model_pars = model_pars,
@@ -279,32 +283,58 @@ if(model_pars$sim$parallel_across_runs){
 }else{
   
   
+  i<-1
+  for(i in iterations_to_run$i){
+    
+    idx<-i  # clone iteration index 
+    p <- iterations_to_run%>%filter(i==idx)%>%pull(p) # get parameter sampling index
+    
+    source("./Parameters/pars_postPriorSampling.R")
+    
+    
+    set.seed(prior_rng_seed*p)
+    init_pop<-init_population(pars)
+    set.seed(prior_rng_seed*p)
+    init_pop<-pairing(pop=init_pop,currentT = 0,pars=pars)
+    
+    start_conditions<-list(init_pop=init_pop)
+    model_pars$mgmt$supp_feeding_df<-model_pars$mgmt$supp_feeding_master[[as.character(all_iterations$SuppFeed[i])]]
+    model_pars$mgmt$release_schedule<-model_pars$mgmt$release_schedule_master%>%
+      dplyr::filter(r==all_iterations$ReleaseStrat[i])
+    
+    set.seed(prior_rng_seed*p+25)
+    output<-run_model(start_conditions=start_conditions,model_pars=model_pars,idx = i)
+    output$run_pars <- all_iterations[i,]
+    output$run_label <- all_iterations$Label[i]
+    
+    # Save output
+    filename_output <- paste0("./Results/", output$run_label, "_Resu_", zero_pad(i, 5), ".RData")
+    save(output, file = filename_output)    
+  
 }
 
-init_pop<-init_population(pars)
-init_pop<-pairing(pop=init_pop,currentT = 0,pars=pars)
-pop<-init_pop
 
 
 
-i<-1
-# for( i in 1:nrow(prior_rng)){
-source("./Parameters/pars_postPriorSampling.R")
 
-start_conditions<-list(init_pop=pop)
-model_pars$mgmt$supp_feeding_df<-model_pars$mgmt$supp_feeding_master[[prior_rng$SuppFeed[i]]]
+}
 
-model_pars$mgmt$release_schedule<-model_pars$mgmt$release_schedule_master%>%
-  dplyr::filter(r==prior_rng$ReleaseStrat[i])
-
-# profvis({
-resu<-run_model(start_conditions=start_conditions,model_pars=model_pars)
-# })
-
-
-
-resu%>%
+output$pop%>%
   dplyr::group_by(t)%>%
   dplyr::summarise(N=sum(alive))%>%
   dplyr::pull(N)%>%
   barplot()
+
+
+age_structure<-resu$pop%>%
+  dplyr::group_by(t,age)%>%
+  dplyr::summarise(N=sum(alive))%>%
+  dplyr::group_by(t)%>%
+  dplyr::mutate(prop=N/sum(N))%>%
+  dplyr::arrange(t,age)%>%
+  dplyr::filter(t%in%c(25:35))%>%
+  dplyr::group_by(age)%>%
+  dplyr::summarise(av_prop=mean(prop))%>%
+  dplyr::ungroup()%>%
+  dplyr::mutate(av_prop_n=av_prop/sum(av_prop))
+

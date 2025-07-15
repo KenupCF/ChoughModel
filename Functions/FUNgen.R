@@ -1,18 +1,21 @@
-calculate_kinship <- function(pop_df, pars) {
+calculate_kinship <- function(pop_df, pars,rm_non_breeders=TRUE) {
   
   require(kinship2)
   
   # Specify required parameters
   needed_pars <- c("founder_ids", "founder_kinship")
   
+  if(rm_non_breeders){
+  # remove individuals with no descendants
+  pop_df<-pop_df%>%
+    dplyr::filter(id%in%unique(c(pop_df$mother_id,pop_df$father_id)))
+  }
   # Prepare pedigree dataframe by selecting relevant columns and removing duplicates
   ped_df <- pop_df %>%
     dplyr::filter(!duplicated(id)) %>%
     dplyr::select(id, mother_id, father_id, sex)
   
-  # remove individuals with no descendants
-  ped_df<-ped_df%>%
-    dplyr::filter(id%in%unique(c(ped_df$mother_id,ped_df$father_id)))
+
   
   # Create pedigree object using the 'kinship2' package's pedigree function
   ped <- with(ped_df, pedigree(id = id, momid = mother_id, dadid = father_id, sex = ifelse(sex == "M", 1, 2)))
@@ -107,16 +110,19 @@ calculate_inbreeding <- function(pop_df, pars) {
     dplyr::mutate(priority = 2)  # Mark as needing estimation
   
   if(nrow(missing_Fi)>0){
+    
   id_filter<-missing_Fi%>%
     dplyr::filter(!duplicated(data.frame(mother_id,father_id)))%>%
     dplyr::select(mother_id,father_id)
   
+  id_filter_vec<-c(id_filter$mother_id,id_filter$father_id)%>%unique()
   
   # Get kinship matrix using the earlier function
   kin <- calculate_kinship(pop_df = pop_df, pars = pars)
   
   # Lookup kinship between each individual's parents
-  parent_kin <- kin[missing_Fi$mother_id, missing_Fi$father_id] %>% diag()
+  parent_kin <- kin[missing_Fi$mother_id, missing_Fi$father_id]
+  if(length(dim(parent_kin))==2){parent_kin<-diag(parent_kin)}
   
   # Extract Fi for fathers of missing individuals
   Fdad <- temp %>%
@@ -147,9 +153,30 @@ calculate_inbreeding <- function(pop_df, pars) {
   new <- plyr::rbind.fill(temp, missing_Fi) %>%
     mutate(t = -1)
   
+
+  ## calculate scottishness
+  dad_scot<-new%>%
+    dplyr::filter(sex=="M")%>%
+    pull_named(scot_heritage,id)
+  
+  mom_scot<-new%>%
+    dplyr::filter(sex=="F")%>%
+    pull_named(scot_heritage,id)
+  
+  kid_scot<-(dad_scot[new$father_id] + mom_scot[new$mother_id])/2 
+  
+  new$recalculated_scot<-kid_scot
+  
+  
+  new<-new%>%
+    dplyr::mutate(scot_heritage=case_when(
+      is.na(scot_heritage)~recalculated_scot,
+      TRUE~scot_heritage
+    ))
+  
   # Clean and return output using tidy_pop_df
   resu <- tidy_pop_df(new) %>%
-    dplyr::select(id,Fi)
+    dplyr::select(id,Fi,scot_heritage)
   
   if(any(is.na(resu$Fi))){stop("Some Fi's not calculated")}
   
@@ -163,6 +190,21 @@ get_kinship_pair <- function(id1, id2, ped) {
   return(kin_mat[id1, id2])
 }
 
+
+
+pull_named <- function(.data, col, names_col = NULL) {
+  col <- rlang::enquo(col)
+  names_col <- rlang::enquo(names_col)
+  
+  vec <- dplyr::pull(.data, !!col)
+  
+  if (!rlang::quo_is_null(names_col)) {
+    vec_names <- dplyr::pull(.data, !!names_col)
+    names(vec) <- vec_names
+  }
+  
+  return(vec)
+}
 
 # subset_ids <- unique(c(id_filter$mother_id, id_filter$father_id))
 # partial_kin <- kinship(ped, ids = subset_ids)
