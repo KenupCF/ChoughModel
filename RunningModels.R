@@ -3,6 +3,19 @@ get_runs_from_gsheet<-TRUE
 replace_runs_gsheet<-FALSE
 prior_rng_seed<-19910526
 
+wd<-"~/RedSquirrelRecoveryEngland/Biological_Model"
+
+if(!dir.exists(wd)){
+  wd<-"C:/Users/caiok/Dropbox/03-Work/01-Science/00-Research Projects/ChoughModel"
+  
+}
+if(!dir.exists(wd)){
+  wd<-"C:/Users/Caio.Kenup/ChoughModel"
+  
+}
+setwd(wd)
+
+
 source("packageLoader.R")
 source("functionLoader.R")
 devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/phd_experimental_functions.R")

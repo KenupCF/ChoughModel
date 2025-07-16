@@ -1,4 +1,14 @@
+wd<-"~/RedSquirrelRecoveryEngland/Biological_Model"
 
+if(!dir.exists(wd)){
+  wd<-"C:/Users/caiok/Dropbox/03-Work/01-Science/00-Research Projects/ChoughModel"
+  
+}
+if(!dir.exists(wd)){
+  wd<-"C:/Users/Caio.Kenup/ChoughModel"
+  
+}
+setwd(wd)
 source("packageLoader.R")
 source("functionLoader.R")
 devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/phd_experimental_functions.R")
@@ -18,18 +28,24 @@ idx<-gsub(x=idx," \\(.*","")
 
 idx<-substr(idx,nchar(idx)-4,nchar(idx))%>%as.numeric()
 
-run_get<-data.frame(i=idx,Run=TRUE,Scheduled=FALSE)
+run_get<-data.frame(i=idx,Run=TRUE,Scheduled=FALSE)%>%
+  dplyr::mutate(`Run Numeric`=as.numeric(Run),
+         Allocated=as.numeric(Run | Scheduled))%>%
+  dplyr::filter(!duplicated(i))
+
 sum(run_get$Run)
 
-runs<- read_sheet(sheet_url,sheet="Runs")%>%
-  replace_na_characters()
+runs <- read_sheet(sheet_url,sheet="Runs")%>%
+  replace_na_characters()%>%
+  dplyr::filter(!duplicated(ID))
+  
 runs$Label<-as.character(runs$Label)
 
-runs2<-full_join(runs%>%
+runs2<-left_join(runs%>%
                    dplyr::mutate(Scheduled=NULL,Run=NULL),
                  run_get%>%
                    dplyr::mutate(Iteration=i)%>%
-                   dplyr::select(Iteration,Run,Scheduled)
+                   dplyr::select(Iteration,Run,Scheduled,`Run Numeric`,Allocated)
                  # ,by=c("Label","Iteration"),all.x=TRUE,all.y=TRUE
 )%>%
   dplyr::arrange(Label,Iteration)%>%
@@ -43,5 +59,7 @@ runs2<-full_join(runs%>%
     is.na(Run)~FALSE,
     TRUE~Run
   ))
+
+str(runs2)
 
 write_sheet(runs2, sheet_url, sheet = "Runs")
