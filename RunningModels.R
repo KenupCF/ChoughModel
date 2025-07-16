@@ -1,6 +1,6 @@
 runLabel<-"testReleaseSizesV2"
 get_runs_from_gsheet<-T
-replace_runs_gsheet<-T
+replace_runs_gsheet<-F
 prior_rng_seed<-19910526
 
 wd<-"/models/ChoughModel"
