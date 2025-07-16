@@ -990,6 +990,32 @@ output_clean_up<-function(rev=FALSE){
 
 
 
+output_clean_up_zip <- function(rev = FALSE) {
+  # Get files in folder
+  files <- list.files(path = "./Results", pattern = "\\.RData$", full.names = TRUE)
+  
+  cat(paste0("\nFound ", length(files), " files\n"))
+  
+  if (length(files) == 0) return(invisible(NULL))
+  if (rev) files <- rev(files)
+  
+  # Define zip filename
+  zip_filename <- file.path(tempdir(), paste0("results_backup_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".zip"))
+  
+  # Create zip file containing all files
+  zip(zipfile = zip_filename, files = files, flags = "-j")  # -j removes directory structure
+  
+  suppressMessages({
+    # Upload the zip file to Google Drive
+    gdrive_upload <- drive_upload(zip_filename, path = as_id("1FSqFfBrvyedxTOUuIFmI44u9tXxEMMU0"))
+    
+    # Get uploaded file name (optional, depending on your workflow)
+    uploaded_file <- attributes(gdrive_upload)$name
+    
+    # Move zip file to backup directory
+    file.rename(zip_filename, file.path(backup_dir, basename(zip_filename)))
+  })
+}
 
 
 
