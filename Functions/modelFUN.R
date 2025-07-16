@@ -144,12 +144,12 @@ run_model<-function(start_conditions,model_pars,idx=NA){
     dplyr::left_join(Fi_df)%>%
     dplyr::mutate(i=idx)
   
-  kinship<-calculate_kinship(pop_df =full_ids,pars=pars,rm_non_breeders=FALSE)
+  # kinship<-calculate_kinship(pop_df =full_ids,pars=pars,rm_non_breeders=FALSE)
   })
   return(list(pop=pop%>%
                 dplyr::mutate(i=idx),
               full_ids=full_ids,
-              kinship=kinship,
+              # kinship=kinship,
               improved_foraging=pars$improved_foraging,
               pars=pars,
               egg_fate=egg_fate%>%
