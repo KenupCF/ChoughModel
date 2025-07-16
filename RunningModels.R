@@ -3,7 +3,7 @@ get_runs_from_gsheet<-TRUE
 replace_runs_gsheet<-FALSE
 prior_rng_seed<-19910526
 
-wd<-"~/RedSquirrelRecoveryEngland/Biological_Model"
+wd<-"~/ChoughModel"
 
 if(!dir.exists(wd)){
   wd<-"C:/Users/caiok/Dropbox/03-Work/01-Science/00-Research Projects/ChoughModel"
