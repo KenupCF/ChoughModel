@@ -1009,11 +1009,11 @@ output_clean_up_zip <- function(rev = FALSE) {
     # Upload the zip file to Google Drive
     gdrive_upload <- drive_upload(zip_filename, path = as_id("1FSqFfBrvyedxTOUuIFmI44u9tXxEMMU0"))
     
-    # Get uploaded file name (optional, depending on your workflow)
-    uploaded_file <- attributes(gdrive_upload)$name
-    
-    # Move zip file to backup directory
+    # Move the zip file to backup directory
     file.rename(zip_filename, file.path(backup_dir, basename(zip_filename)))
+    
+    # Move original .RData files to backup directory
+    file.rename(files, file.path(backup_dir, basename(files)))
   })
 }
 

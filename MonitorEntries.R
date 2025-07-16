@@ -5,7 +5,7 @@ if(!dir.exists(wd)){
   
 }
 if(!dir.exists(wd)){
-  wd<-"C:/Users/Caio.Kenup/RedSquirrelRecoveryEngland/Biological_Model"
+  wd<-"C:/Users/Caio.Kenup/ChoughModel"
   
 }
 setwd(wd)
