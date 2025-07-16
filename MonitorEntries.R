@@ -29,12 +29,12 @@ if (!dir.exists(backup_dir)) {
 cat("\nChecking for files\n")
 
 tryCatch({
-  output_clean_up()
+  output_clean_up_zip()
 }, error = function(e) {
   cat("\nError in output_clean_up: ", conditionMessage(e), "\n")
 })
 
-wait_time_mins<-5
+wait_time_mins<-3
 
 i<-1
 while(1==1){
@@ -43,7 +43,7 @@ while(1==1){
   Sys.sleep(time = wait_time_mins*60)
   cat(paste0("\nChecking for files, check number ",i,"\n"))
   tryCatch({
-    output_clean_up()
+    output_clean_up_zip()
   }, error = function(e) {
     cat("\nError in output_clean_up: ", conditionMessage(e), "\n")
   })
