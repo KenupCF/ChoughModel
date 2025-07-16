@@ -579,7 +579,7 @@ recruitment <- function(pop, currentT, pars, seed = 19,envir_stoch=TRUE,startAge
   prob_nest_sucess<-prob_nest_sucess *
     ((1-(pars$prob_nest_aband*unique(pars$release_schedule_df$nest_aband_allowed))) ^ as.numeric(reproducing$egg_swapped))
 
-  # prob_nest_sucess<-prob_nest_sucess * as.numeric(reproducing$able_to_breed)
+  prob_nest_sucess<-prob_nest_sucess * as.numeric(reproducing$able_to_breed)
   
   reproducing<-reproducing%>%
     dplyr::mutate(B0=NULL,Beta_sf=NULL,Beta_if=NULL,Beta_b=NULL)%>%
@@ -742,7 +742,7 @@ dispersal <- function(pop, currentT, pars, seed = 19) {
   
   # Select eligible dispersers: alive, at current time, and within dispersal age class
   dispersers <- pop %>%
-    dplyr::filter(alive, t == currentT, age %in% pars$dispersalAges) %>%
+    dplyr::filter(alive, t == currentT, age %in% pars$dispersalAges,is.na(pair)) %>%
     dplyr::mutate(priority = 1)
   
   # set.seed(seed)

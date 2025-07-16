@@ -180,7 +180,7 @@ or_df<-plyr::rbind.fill(
     merge(data.frame(
       age = model_pars$bio$inherent$age_first_breed:model_pars$bio$inherent$max_age
     ))
-  )%>%
+)%>%
   plyr::rbind.fill(expand.grid(age_release=0,
                                release_meth=NA_character_,
                                release_time=NA_character_,
@@ -192,8 +192,8 @@ model_pars$bio$surv_coeff<-model_pars$bio$surv_coeff%>%
   dplyr::left_join(or_df)%>%
   # dplyr::filter(!(is.na(OR_release) & !is.na(age_release)))%>%
   dplyr::mutate(OR_release=case_when(
-  is.na(OR_release)~1,
-  TRUE~OR_release
+    is.na(OR_release)~1,
+    TRUE~OR_release
   ))%>%
   dplyr::ungroup()%>%
   dplyr::mutate(Beta0_sd_cyc=case_when(
@@ -212,22 +212,22 @@ model_pars$bio$brood_size_coeff<-data.frame("Beta_sf"=all_iterations$b_brood_siz
                                             "Beta_b"=all_iterations$b_brood_size_imp_for_supp_feed[i])%>%
   merge(data.frame(subpop=model_pars$bio$subpops))%>%
   left_join(data.frame("B0"=c(
-      all_iterations$bl_brood_size_A[i],
-      all_iterations$bl_brood_size_B[i],
-      all_iterations$bl_brood_size_C[i],
-      all_iterations$bl_brood_size_D[i],
-      all_iterations$bl_brood_size_E[i]),
-      "B0_sd"=c(
-        all_iterations$bl_brood_size_sd_A[i],
-        all_iterations$bl_brood_size_sd_B[i],
-        all_iterations$bl_brood_size_sd_C[i],
-        all_iterations$bl_brood_size_sd_D[i],
-        all_iterations$bl_brood_size_sd_E[i]),
-      subpop=model_pars$bio$subpops))
+    all_iterations$bl_brood_size_A[i],
+    all_iterations$bl_brood_size_B[i],
+    all_iterations$bl_brood_size_C[i],
+    all_iterations$bl_brood_size_D[i],
+    all_iterations$bl_brood_size_E[i]),
+    "B0_sd"=c(
+      all_iterations$bl_brood_size_sd_A[i],
+      all_iterations$bl_brood_size_sd_B[i],
+      all_iterations$bl_brood_size_sd_C[i],
+      all_iterations$bl_brood_size_sd_D[i],
+      all_iterations$bl_brood_size_sd_E[i]),
+    subpop=model_pars$bio$subpops))
 
 model_pars$bio$nest_succ_coeff<-data.frame("Beta_sf"=all_iterations$b_nest_succ_supp_feed[i],
-                    "Beta_if"=all_iterations$b_nest_succ_imp_for[i],
-                    "Beta_b"=all_iterations$b_nest_succ_imp_for_supp_feed[i])%>%
+                                           "Beta_if"=all_iterations$b_nest_succ_imp_for[i],
+                                           "Beta_b"=all_iterations$b_nest_succ_imp_for_supp_feed[i])%>%
   merge(data.frame(subpop=model_pars$bio$subpops))%>%
   left_join(model_pars$bio$nest_succ_df)
 

@@ -1,23 +1,21 @@
 
 model_pars$sim<-list()
 
-model_pars$sim$use_genetics<-FALSE
+model_pars$sim$use_genetics<-TRUE
 
-# model_pars$sim$n_years<-50
-# model_pars$sim$n_iter<-100
+model_pars$sim$n_years<-50
+model_pars$sim$n_iter<-100
 
-model_pars$sim$n_years<-30
-model_pars$sim$n_iter<-5
-
+# model_pars$sim$n_years<-30
+# model_pars$sim$n_iter<-5
 
 model_pars$sim$parametric_uncertainty<-FALSE
 model_pars$sim$n_samples_quantile_function<-1e4
 
-
 model_pars$sim$idx_add<-0
 
-model_pars$sim$parallel_across_runs<-FALSE
-model_pars$sim$clusters_to_run<-min(8,parallel::detectCores()-2)
+model_pars$sim$parallel_across_runs<-TRUE
+model_pars$sim$clusters_to_run<-min(52,parallel::detectCores()-2)
 model_pars$sim$batching_clusters<-32
 
 model_pars$priors$start_cycle<-data.frame(min=-0.5,max=4.5,dist="unif")

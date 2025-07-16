@@ -30,7 +30,7 @@ idx<-substr(idx,nchar(idx)-4,nchar(idx))%>%as.numeric()
 
 run_get<-data.frame(i=idx,Run=TRUE,Scheduled=FALSE)%>%
   dplyr::mutate(`Run Numeric`=as.numeric(Run),
-         Allocated=as.numeric(Run | Scheduled),Iteration=i)%>%
+                Allocated=as.numeric(Run | Scheduled),Iteration=i)%>%
   dplyr::filter(!duplicated(i))
 
 sum(run_get$Run)
@@ -41,12 +41,12 @@ runs <- read_sheet(sheet_url,sheet="Runs")%>%
 
 temp<-plyr::rbind.fill(run_get%>%
                          dplyr::select(Iteration,Run,Scheduled),
-                 runs%>%
-                   dplyr::mutate(Iteration=as.numeric(Iteration))%>%
-                   dplyr::filter(!Iteration%in%run_get$Iteration)%>%
-                   dplyr::select(Iteration,Run,Scheduled))%>%
+                       runs%>%
+                         dplyr::mutate(Iteration=as.numeric(Iteration))%>%
+                         dplyr::filter(!Iteration%in%run_get$Iteration)%>%
+                         dplyr::select(Iteration,Run,Scheduled))%>%
   dplyr::arrange(Iteration)
-  
+
 run_col<-LETTERS[colnames(runs)=="Run"]
 sch_col<-LETTERS[colnames(runs)=="Scheduled"]
 

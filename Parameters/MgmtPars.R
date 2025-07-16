@@ -233,11 +233,13 @@ rel_strat_test <- expand.grid(
 )%>%
   dplyr::mutate(r=1:n(),scot_heritage=0)
 
-rel_start_no_release<-rel_strat_00%>%
+rel_strat_no_release<-rel_strat_00%>%
   dplyr::mutate(r=1:n(),scot_heritage=0)
 
 
 ###  decide which release strategies to run 
-
-model_pars$mgmt$release_schedule_master<-rel_start_no_release
+# 
+model_pars$mgmt$release_schedule_master<-rel_strats_test_size
+# model_pars$mgmt$release_schedule_master<-rel_strat_test
+# model_pars$mgmt$release_schedule_master<-rel_strat_no_release
 

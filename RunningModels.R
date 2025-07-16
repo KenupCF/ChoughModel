@@ -1,6 +1,6 @@
-runLabel<-"testNoGeneticsSuppFeedAgeS_V0"
-get_runs_from_gsheet<-FALSE
-replace_runs_gsheet<-FALSE
+runLabel<-"testReleaseSizesV2"
+get_runs_from_gsheet<-T
+replace_runs_gsheet<-T
 prior_rng_seed<-19910526
 
 wd<-"~/ChoughModel"
@@ -69,8 +69,8 @@ source("./Parameters/priorHandling.R")
 
 ### ADJUSTMENTS
 
-# prior_rng$prob_imp_for<-1 # manually turn on improved foraging
-prior_rng$prob_imp_for<-0 # manually turn off improved foraging
+prior_rng$prob_imp_for<-1 # manually turn on improved foraging
+# prior_rng$prob_imp_for<-0 # manually turn off improved foraging
 # prior_rng$year_imp_for<-1
 ### weighing population towards adults
 # model_pars$bio$inherent$age_structure[1:2]<-model_pars$bio$inherent$age_structure[1:2]*.5
@@ -359,7 +359,7 @@ output$pop%>%
   dplyr::summarise(N=sum(alive))%>%
   dplyr::pull(N)%>%
   barplot()
-# 
+
 # output$pop%>%
 #   dplyr::group_by(t)%>%
 #   dplyr::filter(alive)%>%
