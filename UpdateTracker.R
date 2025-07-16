@@ -19,6 +19,7 @@ idx<-gsub(x=idx," \\(.*","")
 idx<-substr(idx,nchar(idx)-4,nchar(idx))%>%as.numeric()
 
 run_get<-data.frame(i=idx,Run=TRUE,Scheduled=FALSE)
+sum(run_get$Run)
 
 runs<- read_sheet(sheet_url,sheet="Runs")%>%
   replace_na_characters()

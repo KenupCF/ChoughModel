@@ -39,7 +39,7 @@ wait_time_mins<-5
 i<-1
 while(1==1){
   
-  
+  cat(paste0("\nWaiting ",i,"\n"))
   Sys.sleep(time = wait_time_mins*60)
   cat(paste0("\nChecking for files, check number ",i,"\n"))
   tryCatch({
