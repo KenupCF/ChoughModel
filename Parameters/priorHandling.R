@@ -19,6 +19,9 @@ adjust_survival<-function(x,Fp=model_pars$bio$gen$starting_inbreeding,DipLetEq){
   return(resu)
 }
 
+# prior_rng$Q_habitat_effect_size<-prior_rng$Q_bl_surv<-seq(from=.025,to=.975,length.out=nrow(prior_rng))
+# prior_rng$diploid_eq<-7
+
 prior_rng$bl_fst_yr_surv_A<-qFUN$`surv A_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)
 prior_rng$bl_fst_yr_surv_B<-qFUN$`surv B_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)
 prior_rng$bl_fst_yr_surv_C<-qFUN$`surv C_1`(x = prior_rng$Q_bl_surv)%>%adjust_survival(DipLetEq = prior_rng$diploid_eq)

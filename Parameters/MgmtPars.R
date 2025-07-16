@@ -239,5 +239,5 @@ rel_start_no_release<-rel_strat_00%>%
 
 ###  decide which release strategies to run 
 
-model_pars$mgmt$release_schedule_master<-rel_strats_test_size
+model_pars$mgmt$release_schedule_master<-rel_start_no_release
 

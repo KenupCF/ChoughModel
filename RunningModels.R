@@ -1,5 +1,5 @@
-runLabel<-"testReleaseSizesV1"
-get_runs_from_gsheet<-TRUE
+runLabel<-"testNoGeneticsSuppFeedAgeS_V0"
+get_runs_from_gsheet<-FALSE
 replace_runs_gsheet<-FALSE
 prior_rng_seed<-19910526
 
@@ -60,14 +60,23 @@ prior_rng<-priorSampling(model_pars$priors,
                          size=model_pars$sim$n_iter)%>%
   dplyr::mutate(p = 1:n())
 
+if(!model_pars$sim$use_genetics){
+prior_rng$diploid_eq<-0  # manually turn off genetics
+}
 
 source("./Parameters/priorHandling.R")
 
 
-prior_rng$prob_imp_for<-0 # manually turn off improved foraging
+### ADJUSTMENTS
+
 # prior_rng$prob_imp_for<-1 # manually turn on improved foraging
+prior_rng$prob_imp_for<-0 # manually turn off improved foraging
 # prior_rng$year_imp_for<-1
-# prior_rng$diploid_eq<-0
+### weighing population towards adults
+# model_pars$bio$inherent$age_structure[1:2]<-model_pars$bio$inherent$age_structure[1:2]*.5
+# model_pars$bio$inherent$age_structure<-model_pars$bio$inherent$age_structure/sum(model_pars$bio$inherent$age_structure)
+
+
 
 mgmt_options<-expand.grid(SuppFeed=c(model_pars$mgmt$supp_feed_opts),
                           ReleaseStrat=model_pars$mgmt$release_schedule_master$r)%>%
@@ -75,7 +84,7 @@ mgmt_options<-expand.grid(SuppFeed=c(model_pars$mgmt$supp_feed_opts),
 
 all_iterations<-merge(prior_rng,mgmt_options)%>%
   dplyr::arrange(p,alt)%>%
-  dplyr::mutate(i=1:n(),Label=runLabel)
+  dplyr::mutate(i=(1:n())+model_pars$sim$idx_add,Label=runLabel)
 
 if(get_runs_from_gsheet | replace_runs_gsheet){
  
@@ -305,7 +314,7 @@ if(model_pars$sim$parallel_across_runs){
   # big_release<-model_pars$mgmt$release_schedule_master%>%dplyr::filter(release_size==24,age_release==2)%>%pull(r)
   # set.seed(19)
   # i<-all_iterations%>%filter(ReleaseStrat%in%big_release)%>%pull(i)%>%sample(1)
-  # i<-1
+  i<-1
   # iterations_to_run<-iterations_to_run%>%
   #   dplyr::filter(i%in%(iteration_chunks%>%unlist%>%head(30)) )
   for(i in iterations_to_run$i){
@@ -342,37 +351,41 @@ if(model_pars$sim$parallel_across_runs){
 
 }
 
+# 
+if(6==9){
+  
 output$pop%>%
   dplyr::group_by(t)%>%
   dplyr::summarise(N=sum(alive))%>%
   dplyr::pull(N)%>%
   barplot()
+# 
+# output$pop%>%
+#   dplyr::group_by(t)%>%
+#   dplyr::filter(alive)%>%
+#   dplyr::summarise(Fp=mean(Fi))%>%
+#   dplyr::pull(Fp)%>%
+#   barplot()
+# 
+# output$pop%>%
+#   dplyr::group_by(t)%>%
+#   dplyr::filter(alive)%>%
+#   dplyr::summarise(S=mean(scot_heritage))%>%
+#   dplyr::pull(S)%>%
+#   barplot()
+# 
+# 
+# 
+# age_structure<-resu$pop%>%
+#   dplyr::group_by(t,age)%>%
+#   dplyr::summarise(N=sum(alive))%>%
+#   dplyr::group_by(t)%>%
+#   dplyr::mutate(prop=N/sum(N))%>%
+#   dplyr::arrange(t,age)%>%
+#   dplyr::filter(t%in%c(25:35))%>%
+#   dplyr::group_by(age)%>%
+#   dplyr::summarise(av_prop=mean(prop))%>%
+#   dplyr::ungroup()%>%
+#   dplyr::mutate(av_prop_n=av_prop/sum(av_prop))
 
-output$pop%>%
-  dplyr::group_by(t)%>%
-  dplyr::filter(alive)%>%
-  dplyr::summarise(Fp=mean(Fi))%>%
-  dplyr::pull(Fp)%>%
-  barplot()
-
-output$pop%>%
-  dplyr::group_by(t)%>%
-  dplyr::filter(alive)%>%
-  dplyr::summarise(S=mean(scot_heritage))%>%
-  dplyr::pull(S)%>%
-  barplot()
-
-
-
-age_structure<-resu$pop%>%
-  dplyr::group_by(t,age)%>%
-  dplyr::summarise(N=sum(alive))%>%
-  dplyr::group_by(t)%>%
-  dplyr::mutate(prop=N/sum(N))%>%
-  dplyr::arrange(t,age)%>%
-  dplyr::filter(t%in%c(25:35))%>%
-  dplyr::group_by(age)%>%
-  dplyr::summarise(av_prop=mean(prop))%>%
-  dplyr::ungroup()%>%
-  dplyr::mutate(av_prop_n=av_prop/sum(av_prop))
-
+}

@@ -149,6 +149,7 @@ run_model<-function(start_conditions,model_pars,idx=NA){
   return(list(pop=pop%>%
                 dplyr::mutate(i=idx),
               full_ids=full_ids,
+              envir_stoch=envir_stoch,
               # kinship=kinship,
               improved_foraging=pars$improved_foraging,
               pars=pars,
