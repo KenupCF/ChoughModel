@@ -5,10 +5,12 @@ all_iterations<-all_iterations%>%
 
 model_pars$bio$gen$dip_leth_eq<-all_iterations$diploid_eq[i]
 
-NA_adj<-1/(model_pars$mgmt$release_year_cont%>%filter(is.na(release_time))%>%pull(yr_duration))
-smr_adj<-1/(model_pars$mgmt$release_year_cont%>%filter(release_time=="Summer")%>%pull(yr_duration))
-wtr_adj<-1/(model_pars$mgmt$release_year_cont%>%filter(release_time=="Winter")%>%pull(yr_duration))
-
+# NA_adj<-1/(model_pars$mgmt$release_year_cont%>%filter(is.na(release_time))%>%pull(yr_duration))
+# smr_adj<-1/(model_pars$mgmt$release_year_cont%>%filter(release_time=="Summer")%>%pull(yr_duration))
+# wtr_adj<-1/(model_pars$mgmt$release_year_cont%>%filter(release_time=="Winter")%>%pull(yr_duration))
+smr_adj<-1
+wtr_adj<-2
+NA_adj <-1
 
 model_pars$bio$surv_coeff <- 
   
@@ -114,17 +116,28 @@ model_pars$bio$surv_coeff <-
         merge(data.frame(age = model_pars$bio$inherent$age_first_breed:model_pars$bio$inherent$max_age))
     )
   )%>%
+  
+  ### this massive merge just means that the Betas in question would be the same across the variables below
+  
   merge(data.frame(origin=c("Wild","Captive")))%>%
   merge(data.frame(release_meth=c(NA,"Staged","Immediate")))%>%
   merge(data.frame(release_time=c(NA,"Summer","Winter")))%>%
   merge(data.frame(habituation=c(NA,0,1)))%>%
-  merge(data.frame(age_release=c(NA,1:model_pars$bio$inherent$max_age)))%>%
+  merge(data.frame(age_release=c(NA,0:model_pars$bio$inherent$max_age)))%>%
+  
   # dplyr::filter(! (age_release==1 & (habituation==0 | release_meth=="Immediate")) )%>%
   dplyr::mutate(Beta0=case_when(
-    age_release==1 & age==1 & origin == "Wild"    & release_time == "Summer" & habituation == 1 & release_meth == "Staged"~all_iterations$pr_fst_yr_survival_w_h_summer[i]^smr_adj,
-    age_release==1 & age==1 & origin == "Wild"    & release_time == "Winter" & habituation == 1 & release_meth == "Staged"~all_iterations$pr_fst_yr_survival_w_h_winter[i]^wtr_adj,
-    age_release==1 & age==1 & origin == "Captive" & release_time == "Summer" & habituation == 1 & release_meth == "Staged"~all_iterations$pr_fst_yr_survival_c_h_summer[i]^smr_adj,
-    age_release==1 & age==1 & origin == "Captive" & release_time == "Winter" & habituation == 1 & release_meth == "Staged"~all_iterations$pr_fst_yr_survival_c_h_winter[i]^wtr_adj,
+    age_release==1 & age==1 & origin == "Wild"    & release_time == "Summer" & habituation == 1 & release_meth == "Staged"~
+      logit(inv.logit(all_iterations$pr_fst_yr_survival_w_h_summer[i])^smr_adj),
+    age_release==1 & age==1 & origin == "Wild"    & release_time == "Winter" & habituation == 1 & release_meth == "Staged"~
+      logit(inv.logit(all_iterations$pr_fst_yr_survival_w_h_winter[i])^wtr_adj),
+    
+    age_release==1 & age==1 & origin == "Captive" & release_time == "Summer" & habituation == 1 & release_meth == "Staged"~
+      logit(inv.logit(all_iterations$pr_fst_yr_survival_c_h_summer[i])^smr_adj),
+    
+    age_release==1 & age==1 & origin == "Captive" & release_time == "Winter" & habituation == 1 & release_meth == "Staged"~
+      logit(inv.logit(all_iterations$pr_fst_yr_survival_c_h_winter[i])^wtr_adj),
+    
     TRUE~Beta0
   ))%>%
   dplyr::mutate(
@@ -167,11 +180,17 @@ or_df<-plyr::rbind.fill(
     merge(data.frame(
       age = model_pars$bio$inherent$age_first_breed:model_pars$bio$inherent$max_age
     ))
-  )
+  )%>%
+  plyr::rbind.fill(expand.grid(age_release=0,
+                               release_meth=NA_character_,
+                               release_time=NA_character_,
+                               age=1:model_pars$bio$inherent$max_age,habituation=NA,OR_release=1,
+                               origin=c(NA_character_,"Wild","Captive")))
+
 
 model_pars$bio$surv_coeff<-model_pars$bio$surv_coeff%>%
   dplyr::left_join(or_df)%>%
-  dplyr::filter(!(is.na(OR_release) & !is.na(age_release)))%>%
+  # dplyr::filter(!(is.na(OR_release) & !is.na(age_release)))%>%
   dplyr::mutate(OR_release=case_when(
   is.na(OR_release)~1,
   TRUE~OR_release
@@ -191,7 +210,7 @@ model_pars$bio$surv_coeff<-model_pars$bio$surv_coeff%>%
 model_pars$bio$brood_size_coeff<-data.frame("Beta_sf"=all_iterations$b_brood_size_supp_feed[i],
                                             "Beta_if"=all_iterations$b_brood_size_imp_for[i],
                                             "Beta_b"=all_iterations$b_brood_size_imp_for_supp_feed[i])%>%
-  merge(data.frame(subpop=subpops))%>%
+  merge(data.frame(subpop=model_pars$bio$subpops))%>%
   left_join(data.frame("B0"=c(
       all_iterations$bl_brood_size_A[i],
       all_iterations$bl_brood_size_B[i],
@@ -204,12 +223,12 @@ model_pars$bio$brood_size_coeff<-data.frame("Beta_sf"=all_iterations$b_brood_siz
         all_iterations$bl_brood_size_sd_C[i],
         all_iterations$bl_brood_size_sd_D[i],
         all_iterations$bl_brood_size_sd_E[i]),
-      subpop=subpops))
+      subpop=model_pars$bio$subpops))
 
 model_pars$bio$nest_succ_coeff<-data.frame("Beta_sf"=all_iterations$b_nest_succ_supp_feed[i],
                     "Beta_if"=all_iterations$b_nest_succ_imp_for[i],
                     "Beta_b"=all_iterations$b_nest_succ_imp_for_supp_feed[i])%>%
-  merge(data.frame(subpop=subpops))%>%
+  merge(data.frame(subpop=model_pars$bio$subpops))%>%
   left_join(model_pars$bio$nest_succ_df)
 
 
@@ -242,8 +261,5 @@ model_pars$mgmt$prob_for_imp <- all_iterations$prob_imp_for[i]
 model_pars$mgmt$year_for_imp <- all_iterations$year_imp_for[i] 
 
 model_pars$sim$start_cycle<- round(all_iterations$start_cycle[i])
-
-
-startK
 
 

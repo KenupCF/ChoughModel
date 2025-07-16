@@ -47,7 +47,7 @@ init_population <- function(pars, seed=19) {
 }
 
 # Function to simulate mortality for individuals at a given time step
-mortality_aging <- function(pop, currentT, pars,seed=19) {
+mortlity_agng <- function(pop, currentT, pars,seed=19) {
   
   # Check that required mortality parameter is provided
   needed_pars <- c("phi_df","max_age","improved_foraging",
@@ -183,7 +183,8 @@ mortality <- function(pop, currentT, pars,seed=19) {
   current <- pop %>%
     dplyr::filter(t == currentT,alive)
   
-  
+  # current<-current%>%
+  #   dplyr::filter(!is.na(age_release))
   current<-current%>%
     
     dplyr::left_join(pars$phi_df)%>%
@@ -463,11 +464,11 @@ recruitment <- function(pop, currentT, pars, seed = 19,envir_stoch=TRUE,startAge
   if(length(missing_pars) > 0){
     stop(paste0("Error: Missing parameters are ", paste0(missing_pars, collapse = ", ")))
   }
-  
-  
+  # 
+  #  
   temp<-pop%>%
     dplyr::filter(
-                  # sex == "F",
+  #                 sex == "F",
                   !is.na(pair),
                   alive,
                   t == currentT,
@@ -491,29 +492,42 @@ recruitment <- function(pop, currentT, pars, seed = 19,envir_stoch=TRUE,startAge
       present_in_april=yr_duration>=(3/12),
       months_in_wild=yr_duration*12,
       months_acclimating=months_in_wild*prop_year_acc,
-      month_release=(12*(1-yr_duration)),
-      final_acc=month_release+months_acclimating,
-      acclimating_in_april=final_acc>=10 & month_release<=10)%>%
+      begin_acc=(12*(1-yr_duration)),
+      final_acc=begin_acc+months_acclimating,
+      acclimating_in_april=final_acc>=10 & begin_acc<=10)%>%
     dplyr::mutate(unable_to_breed = !present_in_april | acclimating_in_april,
                   able_to_breed = !unable_to_breed)
+
+  male_breed_capacity <- temp%>%filter(sex=="M")%>%
+    pull_named(able_to_breed,id)
   
-  male_breed_capacity <- ! temp%>%filter(sex=="M")%>%
-    pull_named(unable_to_breed,id)
+  female_breed_capacity <- temp%>%filter(sex=="F")%>%
+    pull_named(able_to_breed,id)
+  
+  female_pair <- temp%>%filter(sex=="F")%>%
+    pull_named(pair,id)
+  
+  f_breed_df<-data.frame(f_able_to_breed=female_breed_capacity,
+                         id=names(female_breed_capacity),
+                         pair=female_pair,
+                         m_able_to_breed=male_breed_capacity[female_pair])
   
   # Filter eligible reproducing females
-  reproducing <- temp %>%
+  reproducing <- pop %>%
     dplyr::filter(sex == "F",
                   !is.na(pair),
                   alive,
                   t == currentT,
                   age >= pars$breeding_age)%>%
     dplyr::mutate(egg_swapped=FALSE)%>%
-    dplyr::left_join(pars$supp_feeding_current)
+    dplyr::left_join(pars$supp_feeding_current)%>%
+    dplyr::left_join(f_breed_df)%>%
+    dplyr::mutate(able_to_breed = f_able_to_breed & m_able_to_breed)
   
-  reproducing$male_breed<-male_breed_capacity[reproducing$pair]
-  reproducing$female_breed<-reproducing$able_to_breed
+  # # reproducing$male_breed<-male_breed_capacity[reproducing$pair]
+  # reproducing$female_breed<-reproducing$able_to_breed
   
-  reproducing$able_to_breed<-reproducing$female_breed & reproducing$male_breed
+  # reproducing$able_to_breed<-reproducing$female_breed & reproducing$male_breed
   
   # set.seed(seed+1)
   if(envir_stoch){q_sample<-runif(n = 1,min = 0,max = 1)}else{q_sample<-.5}
@@ -641,6 +655,14 @@ recruitment <- function(pop, currentT, pars, seed = 19,envir_stoch=TRUE,startAge
     rep(tempId, offspring[i])
   }) %>%
     unlist()  
+  
+  
+  # Determine age release for each offspring
+  age_rel_vec <- lapply(seq_along(reproducing$id), function(i) {
+    tempId<-ifelse(reproducing$egg_swapped[i],0,NA)
+    rep(tempId, offspring[i])
+  }) %>%
+    unlist()  
   # Assign sexes to offspring
   newSex <- c("F", "M")[rbinom(n = sum(offspring), size = 1, prob = pars$sex_ratio) + 1]
   
@@ -649,6 +671,7 @@ recruitment <- function(pop, currentT, pars, seed = 19,envir_stoch=TRUE,startAge
   born <- data.frame(
     id = generate_unique_ids(n = sum(offspring), existing = pars$all_ids),
     age = startAge,
+    age_release=age_rel_vec,
     sex = newSex,
     subpop = newSubpop,
     t = currentT,
@@ -680,7 +703,7 @@ recruitment <- function(pop, currentT, pars, seed = 19,envir_stoch=TRUE,startAge
   newpop <- plyr::rbind.fill(pop, born)
   egg_fate<-data.frame(t=currentT,swapped=actEggsSwapped,unfledged=actEggsUnfledged)
   
-  return(list(born=born,expEggsUnfledged=expEggsUnfledged,actEggsUnfledged=actEggsUnfledged,stoch_quantile=q_sample,egg_fate=egg_fate))
+  return(list(born=born,expEggsUnfledged=expEggsUnfledged,actEggsUnfledged=actEggsUnfledged,stoch_q=q_sample,egg_fate=egg_fate))
 }
 
 #----------------------------#
@@ -873,7 +896,7 @@ releases<-function(pars,currentT){
     
   }
   
-  if(currentT%in%releaseYears){
+  if(currentT%in%releaseYears & pars$release_schedule_df$release_size>0){
     
     # Generate unique IDs for all new offspring
     released <- data.frame(
@@ -944,6 +967,26 @@ split_evenly_by_col <- function(df, n_groups, target_col) {
 
 
 
+output_clean_up<-function(rev=FALSE){
+  ### Get files in folder
+  files<-list.files(path = "./Results",pattern = ".RData",full.names = T)
+  
+  cat(paste0("\nFound ",length(files)," files\n"))
+  
+  if(rev){files<-rev(files)}
+  if(length(files)>0){
+    #  Upload to Gdrive
+    for(f in files){
+      
+      suppressMessages({
+        gdrive_upload<-sapply(f,drive_upload, path = as_id("1FSqFfBrvyedxTOUuIFmI44u9tXxEMMU0"))
+        uploaded_file<-attributes(gdrive_upload)$dimnames[[2]]
+        # Move files to the backup directory
+        file.rename(uploaded_file, file.path(backup_dir, basename(f)))
+      })
+    }
+  }
+}
 
 
 

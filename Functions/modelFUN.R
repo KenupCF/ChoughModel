@@ -62,6 +62,10 @@ run_model<-function(start_conditions,model_pars,idx=NA){
   
   egg_fate<-data.frame()
   
+  envir_stoch<-data.frame()
+  
+  
+  
   j<-1
   suppressMessages({
   while(j <= n_years){
@@ -94,6 +98,8 @@ run_model<-function(start_conditions,model_pars,idx=NA){
     # survival_outcome<-mortality_aging(pop=currentPop0,currentT = j,pars=pars)
     survival_outcome<-mortality(pop=currentPop0,currentT = j,pars=pars)
     
+    envir_stoch<-plyr::rbind.fill(envir_stoch,data.frame(par="survival",q=survival_outcome$stoch_q,t=j))
+    
     currentPop1<-survival_outcome$alive
     
     currentPop2<-unpair_if_dead(pop=currentPop1,currentT = j)
@@ -103,6 +109,8 @@ run_model<-function(start_conditions,model_pars,idx=NA){
     currentPop4<-dispersal(pop=currentPop3,currentT = j,pars=pars)
     
     born_resu<-recruitment(pop=currentPop4,currentT = j,pars=pars)
+    
+    envir_stoch<-plyr::rbind.fill(envir_stoch,data.frame(par="brood_size",q=born_resu$stoch_q,t=j))
     
     egg_fate<-plyr::rbind.fill(egg_fate,born_resu$egg_fate)
     
@@ -114,6 +122,8 @@ run_model<-function(start_conditions,model_pars,idx=NA){
       tidy_pop_df()
     
     Fi_df<-calculate_inbreeding(pop_df = pop,pars = pars)
+    
+    # Fi_df%>%filter(id%in%born_resu$born$id)
     
     pop<-pop%>%
       dplyr::mutate(Fi=NULL,scot_heritage=NULL)%>%
@@ -127,6 +137,7 @@ run_model<-function(start_conditions,model_pars,idx=NA){
   })
   
   
+  suppressMessages({
   full_ids<-pop%>%
     dplyr::filter(!duplicated(id))%>%
     dplyr::select(id,father_id,mother_id,origin,sex)%>%
@@ -134,11 +145,13 @@ run_model<-function(start_conditions,model_pars,idx=NA){
     dplyr::mutate(i=idx)
   
   kinship<-calculate_kinship(pop_df =full_ids,pars=pars,rm_non_breeders=FALSE)
-  
+  })
   return(list(pop=pop%>%
                 dplyr::mutate(i=idx),
               full_ids=full_ids,
               kinship=kinship,
+              improved_foraging=pars$improved_foraging,
+              pars=pars,
               egg_fate=egg_fate%>%
                 dplyr::mutate(i=idx),
               model_pars=model_pars,
