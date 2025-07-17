@@ -88,7 +88,7 @@ sapply(duplicated_files, file.remove)
 files_df <- files_df %>% filter(!duplicated(i))
 
 # CONNECT TO DUCKDB
-db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results.duckdb"
+db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_sizes_altered.duckdb"
 con <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
 
 # Check which files have already been processed
@@ -130,7 +130,7 @@ for (f in seq_len(nrow(files_df))) {
     dbWriteTable(con, "summary",   bind_rows(buffer$summary), append = TRUE)
     dbWriteTable(con, "N_series",  bind_rows(buffer$N_series), append = TRUE)
     dbWriteTable(con, "egg_fate",  bind_rows(buffer$egg_fate), append = TRUE)
-    dbWriteTable(con, "mgmt",      bind_rows(buffer$mgmt), append = TRUE)
+    # dbWriteTable(con, "mgmt",      bind_rows(buffer$mgmt), append = TRUE)
     dbWriteTable(con, "run_pars",  bind_rows(buffer$run_pars), append = TRUE)
     
     buffer <- list(summary = list(), N_series = list(), egg_fate = list(), mgmt = list(), run_pars = list())
@@ -141,3 +141,4 @@ for (f in seq_len(nrow(files_df))) {
 
 # CLEANUP
 dbDisconnect(con, shutdown = TRUE)
+

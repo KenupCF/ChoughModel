@@ -25,7 +25,8 @@ run_pars<-dbGetQuery(con, "SELECT * FROM run_pars")
 mgmt<-dbGetQuery(con, "SELECT * FROM mgmt")
 
 mgmt<-mgmt%>%
-  dplyr::mutate(Age_Release_String=case_when(noEggsReleased>0~"Eggs",
+  dplyr::mutate(Age_Release_String=case_when(noEggsReleased>0 & nest_aband_allowed   ~"Eggs",
+                                             noEggsReleased>0 & !nest_aband_allowed  ~"Eggs+",
                                              age_release==1~"First year",
                                              age_release==2~"Sub-adults",
                                              age_release==3~"Adults"),
@@ -35,7 +36,7 @@ mgmt<-mgmt%>%
                 Method_String=substr(release_meth,1,2),
                 Habituation_String=case_when(habituation==0~"NH",
                                              habituation==1~"H"))%>%
-  dplyr::mutate(Strategy_Name=case_when(Age_Release_String=="Eggs"~Age_Release_String,
+  dplyr::mutate(Strategy_Name=case_when(str_detect(Age_Release_String,"Eggs")~Age_Release_String,
                                         age_release==1~
                                           paste0(Age_Release_String," - ",release_time," (",Origin_String,"-",Method_String,"-",Habituation_String,")"),
                                         age_release%in%(2:3)~
@@ -50,6 +51,7 @@ mgmt_trim<-mgmt%>%
 
 release_order <- c(
   "Eggs",
+  "Eggs+",
   "First year - Summer (C-St-H)",
   "First year - Summer (W-St-H)",
   "First year - Winter (C-St-H)",
