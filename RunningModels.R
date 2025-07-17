@@ -91,17 +91,16 @@ all_iterations<-merge(prior_rng,mgmt_options)%>%
 
 if(get_runs_from_gsheet | replace_runs_gsheet){
  
-  runs<- read_sheet(sheet_url,sheet="Runs")%>%
+  runs0<- read_sheet(sheet_url,sheet="Runs")
+  runs0$Label<-as.character(runs0$Label)
+  runs<-runs0%>%
     replace_na_characters()%>%
     dplyr::filter(Label==runLabel)
   
-  runs$Label<-as.character(runs$Label)
-  runs2<-full_join(runs,
+  runs2<-left_join(
                    all_iterations%>%
                      dplyr::mutate(Iteration=i)%>%
-                     dplyr::select(Label,alt,Iteration,p)
-                   # ,by=c("Label","Iteration"),all.x=TRUE,all.y=TRUE
-  )%>%
+                     dplyr::select(Label,alt,Iteration,p),runs)%>%
     dplyr::arrange(Label,Iteration)%>%
     dplyr::mutate(ID=paste(Label,zero_pad(Iteration,5),sep="_"))
   
