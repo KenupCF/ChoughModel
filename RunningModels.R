@@ -1,6 +1,6 @@
-runLabel<-"testReleaseSizesV1"
+runLabel<-"bigRunsV2"
 get_runs_from_gsheet<-TRUE
-replace_runs_gsheet<-TRUE
+replace_runs_gsheet<-FALSE
 prior_rng_seed<-19910526
 
 wd<-"/models/ChoughModel"
@@ -69,16 +69,17 @@ source("./Parameters/priorHandling.R")
 
 ### ADJUSTMENTS
 # prior_rng$prob_imp_for<-1 # manually turn on improved foraging
-prior_rng$prob_imp_for<-0 # manually turn off improved foraging
+# prior_rng$prob_imp_for<-0 # manually turn off improved foraging
 # prior_rng$year_imp_for<-1
 ### weighing population towards adults
 # model_pars$bio$inherent$age_structure[1:2]<-model_pars$bio$inherent$age_structure[1:2]*.5
 # model_pars$bio$inherent$age_structure<-model_pars$bio$inherent$age_structure/sum(model_pars$bio$inherent$age_structure)
-
+prior_rng$prob_imp_for<-NULL
 
 
 mgmt_options<-expand.grid(SuppFeed=c(model_pars$mgmt$supp_feed_opts),
-                          ReleaseStrat=model_pars$mgmt$release_schedule_master$r)%>%
+                          ReleaseStrat=model_pars$mgmt$release_schedule_master$r,
+                          prob_imp_for=c(0,1))%>%
   dplyr::mutate(alt=1:n())
 
 # no_release_alt_idx<-mgmt_options%>%dplyr::filter(ReleaseStrat%in%(model_pars$mgmt$release_schedule_master%>%filter(noReleases)%>%pull(r)))%>%pull(alt)
@@ -276,9 +277,9 @@ if(model_pars$sim$parallel_across_runs){
           source("./Parameters/pars_postPriorSampling.R",local = T)
         })
         
-        set.seed(prior_rng_seed*p)
+        set.seed(prior_rng_seed+p)
         init_pop<-init_population(pars=init_pars)
-        set.seed(prior_rng_seed*p)
+        set.seed(prior_rng_seed+p)
         init_pop<-pairing(pop=init_pop,currentT = 0,pars=init_pars)
         
         start_conditions<-list(init_pop=init_pop)
@@ -331,9 +332,9 @@ if(model_pars$sim$parallel_across_runs){
     source("./Parameters/pars_postPriorSampling.R",local = T)
     })
     
-    set.seed(prior_rng_seed*p)
+    set.seed(prior_rng_seed+p)
     init_pop<-init_population(pars=init_pars)
-    set.seed(prior_rng_seed*p)
+    set.seed(prior_rng_seed+p)
     init_pop<-pairing(pop=init_pop,currentT = 0,pars=init_pars)
     
     start_conditions<-list(init_pop=init_pop)

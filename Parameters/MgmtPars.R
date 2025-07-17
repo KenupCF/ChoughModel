@@ -1,8 +1,8 @@
 
-# model_pars$mgmt$supp_feed_opts<-c(
+model_pars$mgmt$supp_feed_opts<-c(
     # "No",
-    # "Current","Provisional")
-model_pars$mgmt$supp_feed_opts<-c("Current")
+    "Current","Provisional")
+# model_pars$mgmt$supp_feed_opts<-c("Current")
 
 
 # Set prior distributions for model parameters using a template
@@ -259,7 +259,7 @@ rel_strat_no_release<-rel_strat_00%>%
 
 ###  decide which release strategies to run 
 # 
-# model_pars$mgmt$release_schedule_master<-rel_strats_test_final
-model_pars$mgmt$release_schedule_master<-rel_strats_test_size
+model_pars$mgmt$release_schedule_master<-rel_strats_test_final
+# model_pars$mgmt$release_schedule_master<-rel_strats_test_size
 # model_pars$mgmt$release_schedule_master<-rel_strat_no_release
 
