@@ -275,9 +275,9 @@ if(model_pars$sim$parallel_across_runs){
           source("./Parameters/pars_postPriorSampling.R",local = T)
         })
         
-        set.seed(prior_rng_seed*p)
+        set.seed(prior_rng_seed+p)
         init_pop<-init_population(pars=init_pars)
-        set.seed(prior_rng_seed*p)
+        set.seed(prior_rng_seed+p)
         init_pop<-pairing(pop=init_pop,currentT = 0,pars=init_pars)
         
         start_conditions<-list(init_pop=init_pop)
