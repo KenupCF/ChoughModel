@@ -19,7 +19,7 @@ gs4_auth(path = "./.tokens/fresh-replica-344321-0e0618a3b5de.json")
 require(stringr)
 
 # setwd("./Results/BackedUp")
-folder_extr<-"D:/03-Work/01-Science/00-Research Projects/RB Chough Results/testReleaseSizesV1"
+folder_extr<-"D:/03-Work/01-Science/00-Research Projects/RB Chough Results/testReleaseSizesV2"
 
 files<-list.files(path = folder_extr,pattern = ".RData",full.names = T)
 
@@ -56,11 +56,11 @@ sch_range<-paste(paste(sch_col,c(1,nrow(temp))+1,sep=""),collapse=":")
 
 range_write(data = temp%>%
               # mutate(Run="A")%>%
-              select(Run), range=run_range,ss=sheet_url, sheet = "Runs",col_names = F)
+              dplyr::select(Run), range=run_range,ss=sheet_url, sheet = "Runs",col_names = F)
 
 range_write(data = temp%>%
               # mutate(Run="A")%>%
-              select(Scheduled), range=sch_range,ss=sheet_url, sheet = "Runs",col_names = F)
+              dplyr::select(Scheduled), range=sch_range,ss=sheet_url, sheet = "Runs",col_names = F)
 # 
 # # Join updated `Run` values from `temp`
 # runs2 <- runs %>%

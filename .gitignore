@@ -2,6 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
-Data/
-.secrets/
-.tokens/
+.secrets
+.tokens
+Data
+Results
