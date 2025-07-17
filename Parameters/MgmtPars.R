@@ -1,6 +1,8 @@
 
-# supp_feed_used<-c("No","Current","Provisional")
-model_pars$mgmt$supp_feed_opts<-c("Current")
+model_pars$mgmt$supp_feed_opts<-c(
+    # "No",
+    "Current","Provisional")
+# model_pars$mgmt$supp_feed_opts<-c("Current")
 
 
 # Set prior distributions for model parameters using a template
@@ -219,6 +221,24 @@ rel_strats_test_size<-plyr::rbind.fill(rel_strat_01,rel_strat_01a,rel_strat_02,r
                         rel_strat_07,rel_strat_08,rel_strat_09,rel_strat_10,rel_strat_11,rel_strat_12)%>%
   dplyr::mutate(r=1:n(),scot_heritage=0)
 
+#### temporary to just get one of each release type
+rel_strats_test_final<-rel_strats_test_size%>%
+  plyr::rbind.fill(rel_strat_00)%>%
+  dplyr::mutate(release_size=case_when(release_size>0~NA,
+                                       TRUE~release_size),
+                noEggsReleased=case_when(noEggsReleased>0~NA,
+                                         TRUE~noEggsReleased))%>%
+  dplyr::filter(!duplicated(data.frame(release_size,noEggsReleased,
+                                       age_release,origin,habituation,release_time,release_meth,
+                                       nest_aband_allowed,release_years,wait_for_habitat,subpop,backup_subpop)))%>%
+  dplyr::mutate(wait_for_habitat=NULL)%>%
+  dplyr::mutate(noReleases=(release_size+noEggsReleased)==0)%>%
+  dplyr::mutate(noReleases=case_when(is.na(noReleases)~FALSE,TRUE~noReleases))%>%
+  merge(data.frame(wait_for_habitat=c(F,T)))%>%
+  dplyr::filter(!(noReleases& wait_for_habitat))%>%
+  dplyr::mutate(r=1:n(),scot_heritage=0)
+write.csv(rel_strats_test_final,"release_strategy_template.csv")
+
 # Test strategy for sensitivity or debugging
 rel_strat_test <- expand.grid(
   release_size     = 24,
@@ -239,7 +259,7 @@ rel_strat_no_release<-rel_strat_00%>%
 
 ###  decide which release strategies to run 
 # 
-model_pars$mgmt$release_schedule_master<-rel_strats_test_size
+model_pars$mgmt$release_schedule_master<-rel_strats_test_final
 # model_pars$mgmt$release_schedule_master<-rel_strat_test
 # model_pars$mgmt$release_schedule_master<-rel_strat_no_release
 

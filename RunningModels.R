@@ -1,6 +1,6 @@
-runLabel<-"testReleaseSizesV2"
-get_runs_from_gsheet<-T
-replace_runs_gsheet<-F
+runLabel<-"bigRunV1"
+get_runs_from_gsheet<-TRUE
+replace_runs_gsheet<-FALSE
 prior_rng_seed<-19910526
 
 wd<-"/models/ChoughModel"
@@ -68,8 +68,7 @@ source("./Parameters/priorHandling.R")
 
 
 ### ADJUSTMENTS
-
-prior_rng$prob_imp_for<-1 # manually turn on improved foraging
+# prior_rng$prob_imp_for<-1 # manually turn on improved foraging
 # prior_rng$prob_imp_for<-0 # manually turn off improved foraging
 # prior_rng$year_imp_for<-1
 ### weighing population towards adults
@@ -82,6 +81,8 @@ mgmt_options<-expand.grid(SuppFeed=c(model_pars$mgmt$supp_feed_opts),
                           ReleaseStrat=model_pars$mgmt$release_schedule_master$r)%>%
   dplyr::mutate(alt=1:n())
 
+no_release_alt_idx<-mgmt_options%>%dplyr::filter(ReleaseStrat%in%(model_pars$mgmt$release_schedule_master%>%filter(noReleases)%>%pull(r)))%>%pull(alt)
+
 all_iterations<-merge(prior_rng,mgmt_options)%>%
   dplyr::arrange(p,alt)%>%
   dplyr::mutate(i=(1:n())+model_pars$sim$idx_add,Label=runLabel)
@@ -89,7 +90,9 @@ all_iterations<-merge(prior_rng,mgmt_options)%>%
 if(get_runs_from_gsheet | replace_runs_gsheet){
  
   runs<- read_sheet(sheet_url,sheet="Runs")%>%
-    replace_na_characters()
+    replace_na_characters()%>%
+    dplyr::filter(Label==runLabel)
+  
   runs$Label<-as.character(runs$Label)
   runs2<-full_join(runs,
                    all_iterations%>%
@@ -327,9 +330,9 @@ if(model_pars$sim$parallel_across_runs){
     source("./Parameters/pars_postPriorSampling.R",local = T)
     })
     
-    set.seed(prior_rng_seed*p)
+    set.seed(prior_rng_seed+p)
     init_pop<-init_population(pars=init_pars)
-    set.seed(prior_rng_seed*p)
+    set.seed(prior_rng_seed+p)
     init_pop<-pairing(pop=init_pop,currentT = 0,pars=init_pars)
     
     start_conditions<-list(init_pop=init_pop)
@@ -360,12 +363,12 @@ output$pop%>%
   dplyr::pull(N)%>%
   barplot()
 
-# output$pop%>%
-#   dplyr::group_by(t)%>%
-#   dplyr::filter(alive)%>%
-#   dplyr::summarise(Fp=mean(Fi))%>%
-#   dplyr::pull(Fp)%>%
-#   barplot()
+output$pop%>%
+  dplyr::group_by(t)%>%
+  dplyr::filter(alive)%>%
+  dplyr::summarise(Fp=mean(Fi))%>%
+  dplyr::pull(Fp)%>%
+  barplot()
 # 
 # output$pop%>%
 #   dplyr::group_by(t)%>%
