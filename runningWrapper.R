@@ -10,6 +10,4 @@ if(!dir.exists(wd)){
 }
 setwd(wd)
 
-
-
 source("RunningModels.R")

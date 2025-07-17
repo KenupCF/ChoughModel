@@ -4,12 +4,12 @@ model_pars$sim<-list()
 model_pars$sim$use_genetics<-TRUE
 
 model_pars$sim$n_years<-50
-model_pars$sim$n_iter<-1000
+model_pars$sim$n_iter<-100
 
 # model_pars$sim$n_years<-30
 # model_pars$sim$n_iter<-5
 
-model_pars$sim$parametric_uncertainty<-TRUE
+model_pars$sim$parametric_uncertainty<-FALSE
 model_pars$sim$n_samples_quantile_function<-1e4
 
 model_pars$sim$idx_add<-0

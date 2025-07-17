@@ -1,8 +1,8 @@
 
-model_pars$mgmt$supp_feed_opts<-c(
+# model_pars$mgmt$supp_feed_opts<-c(
     # "No",
-    "Current","Provisional")
-# model_pars$mgmt$supp_feed_opts<-c("Current")
+    # "Current","Provisional")
+model_pars$mgmt$supp_feed_opts<-c("Current")
 
 
 # Set prior distributions for model parameters using a template
@@ -190,7 +190,7 @@ rel_strat_10 <- expand.grid(
   release_meth    = "Staged",
   noEggsReleased   = 0,nest_aband_allowed=TRUE,
   release_years    = 5, wait_for_habitat=FALSE,
-  subpop           = "A",backup_subpop="C"
+  subpop           = "B",backup_subpop="C"
 )
 
 rel_strat_11 <- expand.grid(
@@ -202,7 +202,7 @@ rel_strat_11 <- expand.grid(
   release_meth    = "Staged",
   noEggsReleased   = 0,nest_aband_allowed=TRUE,
   release_years    = 5, wait_for_habitat=FALSE,
-  subpop           = "A",backup_subpop="C"
+  subpop           = "B",backup_subpop="C"
 )
 
 rel_strat_12 <- expand.grid(
@@ -214,7 +214,7 @@ rel_strat_12 <- expand.grid(
   release_meth    = "Immediate",
   noEggsReleased   = 0,nest_aband_allowed=TRUE,
   release_years    = 5, wait_for_habitat=FALSE,
-  subpop           = "A",backup_subpop="C"
+  subpop           = "B",backup_subpop="C"
 )
 
 rel_strats_test_size<-plyr::rbind.fill(rel_strat_01,rel_strat_01a,rel_strat_02,rel_strat_03,rel_strat_04,rel_strat_05,rel_strat_06,
@@ -259,7 +259,7 @@ rel_strat_no_release<-rel_strat_00%>%
 
 ###  decide which release strategies to run 
 # 
-model_pars$mgmt$release_schedule_master<-rel_strats_test_final
-# model_pars$mgmt$release_schedule_master<-rel_strat_test
+# model_pars$mgmt$release_schedule_master<-rel_strats_test_final
+model_pars$mgmt$release_schedule_master<-rel_strats_test_size
 # model_pars$mgmt$release_schedule_master<-rel_strat_no_release
 
