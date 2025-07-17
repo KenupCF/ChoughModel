@@ -9,9 +9,9 @@
 "8",NA,2,"Captive",1,"Winter","Staged",0,TRUE,5,"A","C",8,0,FALSE,FALSE
 "9",NA,2,"Wild",0,"Winter","Staged",0,TRUE,5,"A","C",9,0,FALSE,FALSE
 "10",NA,2,"Wild",1,"Winter","Staged",0,TRUE,5,"A","C",10,0,FALSE,FALSE
-"11",NA,3,"Captive",0,"Winter","Staged",0,TRUE,5,"A","C",11,0,FALSE,FALSE
-"12",NA,3,"Captive",1,"Winter","Staged",0,TRUE,5,"A","C",12,0,FALSE,FALSE
-"13",NA,3,"Wild",0,"Winter","Immediate",0,TRUE,5,"A","C",13,0,FALSE,FALSE
+"11",NA,3,"Captive",0,"Winter","Staged",0,TRUE,5,"B","C",11,0,FALSE,FALSE
+"12",NA,3,"Captive",1,"Winter","Staged",0,TRUE,5,"B","C",12,0,FALSE,FALSE
+"13",NA,3,"Wild",0,"Winter","Immediate",0,TRUE,5,"B","C",13,0,FALSE,FALSE
 "14",0,NA,NA,NA,NA,NA,0,TRUE,0,"A","C",14,0,TRUE,FALSE
 "15",0,NA,NA,NA,NA,NA,NA,TRUE,5,"A","C",15,0,FALSE,TRUE
 "16",0,NA,NA,NA,NA,NA,NA,FALSE,5,"A","C",16,0,FALSE,TRUE
@@ -23,6 +23,6 @@
 "22",NA,2,"Captive",1,"Winter","Staged",0,TRUE,5,"A","C",22,0,FALSE,TRUE
 "23",NA,2,"Wild",0,"Winter","Staged",0,TRUE,5,"A","C",23,0,FALSE,TRUE
 "24",NA,2,"Wild",1,"Winter","Staged",0,TRUE,5,"A","C",24,0,FALSE,TRUE
-"25",NA,3,"Captive",0,"Winter","Staged",0,TRUE,5,"A","C",25,0,FALSE,TRUE
-"26",NA,3,"Captive",1,"Winter","Staged",0,TRUE,5,"A","C",26,0,FALSE,TRUE
-"27",NA,3,"Wild",0,"Winter","Immediate",0,TRUE,5,"A","C",27,0,FALSE,TRUE
+"25",NA,3,"Captive",0,"Winter","Staged",0,TRUE,5,"B","C",25,0,FALSE,TRUE
+"26",NA,3,"Captive",1,"Winter","Staged",0,TRUE,5,"B","C",26,0,FALSE,TRUE
+"27",NA,3,"Wild",0,"Winter","Immediate",0,TRUE,5,"B","C",27,0,FALSE,TRUE
