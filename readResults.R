@@ -83,19 +83,24 @@ process_result_file <- function(filename,folder_id){
     extinct <- finalN <= 2
     time_extinct <- ifelse(extinct, length(Ns), NA)
     
+    egg_fate <- output$egg_fate
+    
+    total_eggs_released<-sum(egg_fate$swapped)
+    total_eggs_lost <- sum(egg_fate$unfledged)
     summ <- data.frame(
       extinct = extinct,
       finalN = finalN,
       trend = trend,
       time_extinct = time_extinct,
       release_deaths=release_deaths,
+      total_eggs_released=total_eggs_released,
+      total_eggs_lost=total_eggs_lost,
       i = idx,
       label = label
     )%>%
       merge(gen_final_outcome)
     
     run_pars <- output$run_pars
-    egg_fate <- output$egg_fate
     release_sch <- output$model_pars$mgmt$release_schedule
     
     mgmt <- release_sch %>%
