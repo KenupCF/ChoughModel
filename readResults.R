@@ -3,7 +3,7 @@ library(progress)
 library(duckdb)
 
 # SETUP
-folder_extr <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/testReleaseSizesV2"
+folder_extr <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/bigRunsV2"
 folderID    <- gsub(x=folder_extr,"^.*/","")
 loopSize    <- 1e6
 
@@ -14,6 +14,20 @@ process_result_file <- function(filename,folder_id){
     
     idx <- unique(output$pop$i)
     label <- output$run_label
+    
+    released_individuals<-output$pop%>%filter(!is.na(age_release))%>%pull(id)%>%unique
+    
+    release_deaths<-(output$pop%>%
+      filter(id%in%released_individuals,!alive)%>%
+      pull(tsr)<2)%>%
+      sum()
+    
+    gen_final_outcome<-output$pop%>%
+      dplyr::filter(t%in%(max(t):(max(t)-5)),alive)%>%
+      dplyr::group_by(t)%>%
+      dplyr::summarise(N=sum(alive),Sp=mean(scot_heritage),Fp=mean(Fi),.groups="drop")%>%
+      dplyr::mutate(Nw=N/sum(N))%>%
+      dplyr::summarise(Sp=sum(Sp*Nw),Fp=sum(Fp*Nw))
     
     N_df <- output$pop %>%
       dplyr::group_by(t, i) %>%
@@ -36,9 +50,11 @@ process_result_file <- function(filename,folder_id){
       finalN = finalN,
       trend = trend,
       time_extinct = time_extinct,
+      release_deaths=release_deaths,
       i = idx,
       label = label
-    )
+    )%>%
+      merge(gen_final_outcome)
     
     run_pars <- output$run_pars
     egg_fate <- output$egg_fate
@@ -54,7 +70,7 @@ process_result_file <- function(filename,folder_id){
     N_series = N_df,
     egg_fate = egg_fate,
     mgmt = mgmt,
-    run_pars = as.data.frame(run_pars) %>% mutate(i = idx)
+    run_pars = as.data.frame(run_pars)
   )
   
   resu<-lapply(resu,function(x){
@@ -72,7 +88,8 @@ r_files <- list.files(path = folder_extr, pattern = ".RData", full.names = TRUE)
 idx <- r_files %>%
   gsub(".RData", "", .) %>%
   gsub(" \\(.*", "", .) %>%
-  substr(nchar(.) - 4, nchar(.)) %>%
+  substr(nchar(.) - 5, nchar(.)) %>%
+  gsub("_","",.)%>%
   as.numeric()
 
 files_df <- data.frame(file = r_files, i = idx) %>%
@@ -88,7 +105,7 @@ sapply(duplicated_files, file.remove)
 files_df <- files_df %>% filter(!duplicated(i))
 
 # CONNECT TO DUCKDB
-db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_sizes_altered.duckdb"
+db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_bigv2.duckdb"
 con <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
 
 # Check which files have already been processed
@@ -116,9 +133,21 @@ pb <- progress_bar$new(
 # Prepare buffers
 buffer <- list(summary = list(), N_series = list(), egg_fate = list(), mgmt = list(), run_pars = list())
 
+time_limit_secs <- 60*60*0.5  #3 hours
+start_time <- Sys.time()
+
 # LOOP OVER NEW FILES
 for (f in seq_len(nrow(files_df))) {
-  result <- process_result_file(files_df$file[f],folder_id = folderID)
+  
+  
+  result <- tryCatch({
+    process_result_file(files_df$file[f], folder_id = folderID)
+  }, error = function(e) {
+    message(sprintf("Error processing file %s: %s", files_df$file[f], e$message))
+    return(NULL)
+  })
+  
+  if (is.null(result)) next
   
   buffer$summary[[f]]   <- result$summary
   buffer$N_series[[f]]  <- result$N_series
@@ -130,11 +159,18 @@ for (f in seq_len(nrow(files_df))) {
     dbWriteTable(con, "summary",   bind_rows(buffer$summary), append = TRUE)
     dbWriteTable(con, "N_series",  bind_rows(buffer$N_series), append = TRUE)
     dbWriteTable(con, "egg_fate",  bind_rows(buffer$egg_fate), append = TRUE)
-    # dbWriteTable(con, "mgmt",      bind_rows(buffer$mgmt), append = TRUE)
+    dbWriteTable(con, "mgmt",      bind_rows(buffer$mgmt), append = TRUE)
     dbWriteTable(con, "run_pars",  bind_rows(buffer$run_pars), append = TRUE)
     
     buffer <- list(summary = list(), N_series = list(), egg_fate = list(), mgmt = list(), run_pars = list())
   }
+  
+  elapsed_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+  if (elapsed_time > time_limit_secs) {
+    message("Time limit reached. Stopping loop.")
+    break
+  }
+  
   
   pb$tick()
 }
