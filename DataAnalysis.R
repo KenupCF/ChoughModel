@@ -14,13 +14,17 @@ source("packageLoader.R")
 require(duckdb)
 
 # CONNECT TO DUCKDB
-db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_sizes_altered.duckdb"
+db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_bigv2.duckdb"
 con <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
 
 
 summary<-dbGetQuery(con, "SELECT * FROM summary")
 
 run_pars<-dbGetQuery(con, "SELECT * FROM run_pars")
+
+run_pars<-run_pars%>%
+  dplyr::mutate(Habitat_Scenario=case_when(prob_imp_for==0~"No habitat improvement",
+                                           prob_imp_for==1~"Habitat improved"))
 
 mgmt<-dbGetQuery(con, "SELECT * FROM mgmt")
 
@@ -36,15 +40,21 @@ mgmt<-mgmt%>%
                 Method_String=substr(release_meth,1,2),
                 Habituation_String=case_when(habituation==0~"NH",
                                              habituation==1~"H"))%>%
-  dplyr::mutate(Strategy_Name=case_when(str_detect(Age_Release_String,"Eggs")~Age_Release_String,
+  dplyr::mutate(Release_Strategy_Name=case_when(release_size==0 & noEggsReleased==0~"No releases",
+                                        str_detect(Age_Release_String,"Eggs")~Age_Release_String,
                                         age_release==1~
                                           paste0(Age_Release_String," - ",release_time," (",Origin_String,"-",Method_String,"-",Habituation_String,")"),
                                         age_release%in%(2:3)~
                                           paste0(Age_Release_String," (",Origin_String,"-",Method_String,"-",Habituation_String,")"),
-                                        TRUE~NA))
+                                        TRUE~NA),
+                Release_Time_String=case_when(release_size==0 & noEggsReleased==0~"",
+                                                        wait_for_habitat~"Wait for habitat improvement",
+                                                        !wait_for_habitat~"Right away"))
 
 mgmt_trim<-mgmt%>%
-  dplyr::select(Strategy_Name,Individuals_Released,i,folder)
+  dplyr::select(Strategy_Name,Release_Time_String,SuppFeed,Individuals_Released,i,folder)%>%
+  dplyr::left_join(run_pars%>%
+                     dplyr::select(i,folder,Habitat_Scenario))
 
 
 
@@ -69,11 +79,13 @@ release_order <- c(
 
 resu<-summary%>%
   dplyr::left_join(mgmt_trim)%>%
-  dplyr::group_by(folder,Strategy_Name,Individuals_Released)%>%
-  dplyr::summarise(probPersist=1-mean(extinct))%>%
-  dplyr::mutate(scenario=case_when(folder=="testReleaseSizesV1"~"No Habitat Improvement",
-                                   folder=="testReleaseSizesV2"~"Habitat Improved"))
-
+  dplyr::group_by(Habitat_Scenario,Release_Time_String,SuppFeed,Strategy_Name,Individuals_Released)%>%
+  dplyr::summarise(probPersist=1-mean(extinct),
+                   propPopulationsDeclining=mean(trend<1),
+                   avTrend=mean(trend),
+                   finalN=mean(finalN*(!extinct)),
+                   finalFp=mean(Fp),
+                   finalSp=mean(Sp))
 
 resu$Strategy_Name<-factor(resu$Strategy_Name,levels=release_order)
 

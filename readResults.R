@@ -6,7 +6,7 @@ library(duckdb)
 folder_extr <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/bigRunsV2"
 folderID    <- gsub(x=folder_extr,"^.*/","")
 loopSize    <- 1e6
-time_limit_secs <- 60*60*(10/60)  #3 hours
+time_limit_secs <- 60*60*(5/60)  #3 hours
 
 # Define processing function
 process_result_file <- function(filename,folder_id){
