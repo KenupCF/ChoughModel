@@ -18,10 +18,18 @@ process_result_file <- function(filename,folder_id){
     
     released_individuals<-output$pop%>%filter(!is.na(age_release))%>%pull(id)%>%unique
     
-    release_deaths<-(output$pop%>%
-      filter(id%in%released_individuals,!alive)%>%
-      pull(tsr)<2)%>%
+    release_deaths<-output$pop%>%
+      dplyr::filter(id%in%released_individuals,!alive)%>%
+      dplyr::mutate(dead_before_first_june=case_when(age_release==0~age==1,
+                                              age_release>0~tsr<=1))%>%
+      dplyr::left_join(output$model_pars$mgmt$release_year_cont)%>%
+      dplyr::group_by(age_release)%>%
+      dplyr::summarise(
+        mortality=mean(dead_before_first_june),
+        expectedDeaths=sum(dead_before_first_june)^unique(yr_duration))%>%
+      pull(expectedDeaths)%>%
       sum()
+      
     
     gen_final_outcome<-output$pop%>%
       dplyr::filter(t%in%(max(t):(max(t)-5)),alive)%>%
