@@ -1,12 +1,16 @@
 library(dplyr)
 library(progress)
 library(duckdb)
+library(stringr)
+library(lubridate)
+
+options(warn = 2)
 
 # SETUP
-folder_extr <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/bigRunsV2"
+folder_extr <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/bigRunsV3_LHS"
 folderID    <- gsub(x=folder_extr,"^.*/","")
-loopSize    <- 1e6
-time_limit_secs <- 60*60*2  #3 hours
+loopSize    <- 1e3
+time_limit_secs <- 60*60*(40/60)  #3 hours
 
 # Define processing function
 process_result_file <- function(filename,folder_id){
@@ -16,8 +20,30 @@ process_result_file <- function(filename,folder_id){
     idx <- unique(output$pop$i)
     label <- output$run_label
     
-    released_individuals<-output$pop%>%filter(!is.na(age_release))%>%pull(id)%>%unique
+    output$pop0<-output$pop
     
+    zeroNs<-which(output$pop0%>%
+      dplyr::group_by(t)%>%
+      dplyr::summarise(N=sum(alive))%>%
+      dplyr::pull(N)==0)    
+    
+    suppressWarnings({
+      zeroN<-min(zeroNs)
+    })
+    
+    output$pop<-output$pop%>%
+      dplyr::filter(t<zeroN)
+    output$egg_fate<-output$egg_fate%>%
+      dplyr::filter(t<zeroN)
+    output$envir_stoch<-output$envir_stoch%>%
+      dplyr::filter(t<zeroN)
+    
+    released_individuals<-output$pop%>%
+      filter(!is.na(age_release))%>%
+      pull(id)%>%
+      unique
+    
+    if(length(released_individuals)>0){
     release_deaths<-output$pop%>%
       dplyr::filter(id%in%released_individuals,!alive)%>%
       dplyr::mutate(dead_before_first_june=case_when(age_release==0~age==1,
@@ -29,6 +55,7 @@ process_result_file <- function(filename,folder_id){
         expectedDeaths=sum(dead_before_first_june)^unique(yr_duration))%>%
       pull(expectedDeaths)%>%
       sum()
+    }else{release_deaths<-0}
       
     
     gen_final_outcome<-output$pop%>%
@@ -47,7 +74,9 @@ process_result_file <- function(filename,folder_id){
     Ns <- pull(N_df, N)
     Ns_2 <- Ns
     if (last(Ns_2) == 0) Ns_2 <- Ns_2[-length(Ns_2)]
-    lambda <- Ns_2[-1] / Ns_2[-length(Ns_2)]
+    
+    lambda <- (Ns_2[-1]) / (Ns_2[-length(Ns_2)])
+    
     trend <- prod(lambda)^(1 / length(lambda))
     
     finalN <- tail(Ns, 1)
@@ -114,7 +143,7 @@ sapply(duplicated_files, file.remove)
 files_df <- files_df %>% filter(!duplicated(i))
 
 # CONNECT TO DUCKDB
-db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_bigv2.duckdb"
+db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_bigv3.duckdb"
 con <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
 
 # Check which files have already been processed
@@ -140,12 +169,18 @@ pb <- progress_bar$new(
   clear = FALSE,
   width = 60
 )
+buffer_size<-20
+counter<-0
 
 # Prepare buffers
-buffer <- list(summary = list(), N_series = list(), egg_fate = list(), mgmt = list(), run_pars = list())
-
+buffer <- list(
+  summary = vector("list", length = buffer_size),    # Preallocate 10 slots for summary
+  N_series = vector("list", length = buffer_size),    # Preallocate 10 slots for N_series
+  egg_fate = vector("list", length = buffer_size),    # Preallocate 10 slots for egg_fate
+  mgmt = vector("list", length = buffer_size),        # Preallocate 10 slots for mgmt
+  run_pars = vector("list", length = buffer_size)     # Preallocate 10 slots for run_pars
+)
 start_time <- Sys.time()
-
 # LOOP OVER NEW FILES
 for (f in seq_len(nrow(files_df))) {
   
@@ -165,7 +200,9 @@ for (f in seq_len(nrow(files_df))) {
   buffer$mgmt[[f]]      <- result$mgmt
   buffer$run_pars[[f]]  <- result$run_pars
   
-  if (f %% 50 == 0 || f == nrow(files_df)) {
+  
+  if(6==9){
+  # if (f %% buffer_size == 0 || f == nrow(files_df)) {
     dbWriteTable(con, "summary",   bind_rows(buffer$summary), append = TRUE)
     dbWriteTable(con, "N_series",  bind_rows(buffer$N_series), append = TRUE)
     dbWriteTable(con, "egg_fate",  bind_rows(buffer$egg_fate), append = TRUE)
@@ -175,6 +212,7 @@ for (f in seq_len(nrow(files_df))) {
     buffer <- list(summary = list(), N_series = list(), egg_fate = list(), mgmt = list(), run_pars = list())
   }
   
+  counter<-counter+1
   elapsed_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
   if (elapsed_time > time_limit_secs) {
     message("Time limit reached. Stopping loop.")
@@ -184,6 +222,10 @@ for (f in seq_len(nrow(files_df))) {
   
   pb$tick()
 }
+
+time_diff<-difftime(now(),start_time)
+cat(paste0("Imported ",counter," entries in ",round(time_diff,2)," ",attr(time_diff, "units")))
+
 
 # CLEANUP
 dbDisconnect(con, shutdown = TRUE)
