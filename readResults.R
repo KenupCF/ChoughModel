@@ -6,6 +6,7 @@ library(duckdb)
 folder_extr <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/bigRunsV2"
 folderID    <- gsub(x=folder_extr,"^.*/","")
 loopSize    <- 1e6
+time_limit_secs <- 60*60*(10/60)  #3 hours
 
 # Define processing function
 process_result_file <- function(filename,folder_id){
@@ -120,6 +121,8 @@ if (!"summary" %in% dbListTables(con)) {
 # Filter to new files only
 files_df <- files_df %>% filter(!i %in% already_imported)
 
+cat(paste0(nrow(files_df), " files still left to read."))
+
 files_df<-files_df[1:min(loopSize,nrow(files_df)),]
 
 # PROGRESS BAR
@@ -133,7 +136,6 @@ pb <- progress_bar$new(
 # Prepare buffers
 buffer <- list(summary = list(), N_series = list(), egg_fate = list(), mgmt = list(), run_pars = list())
 
-time_limit_secs <- 60*60*0.5  #3 hours
 start_time <- Sys.time()
 
 # LOOP OVER NEW FILES

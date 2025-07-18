@@ -19,14 +19,14 @@ gs4_auth(path = "./.tokens/fresh-replica-344321-0e0618a3b5de.json")
 require(stringr)
 
 # setwd("./Results/BackedUp")
-folder_extr<-"D:/03-Work/01-Science/00-Research Projects/RB Chough Results/testReleaseSizesV2"
+folder_extr<-"D:/03-Work/01-Science/00-Research Projects/RB Chough Results/bigRunsV2"
 
 files<-list.files(path = folder_extr,pattern = ".RData",full.names = T)
 
 idx<-gsub(x=files,".RData","")
 idx<-gsub(x=idx," \\(.*","")
 
-idx<-substr(idx,nchar(idx)-4,nchar(idx))%>%as.numeric()
+idx<-gsub(x=substr(idx,nchar(idx)-5,nchar(idx)),"_","")%>%as.numeric()
 
 run_get<-data.frame(i=idx,Run=TRUE,Scheduled=FALSE)%>%
   dplyr::mutate(`Run Numeric`=as.numeric(Run),
