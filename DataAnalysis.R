@@ -14,7 +14,7 @@ source("packageLoader.R")
 require(duckdb)
 
 # CONNECT TO DUCKDB
-db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_bigv2.duckdb"
+db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_bigv2 - Copy.duckdb"
 con <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
 
 
@@ -26,6 +26,7 @@ run_pars<-run_pars%>%
   dplyr::mutate(Habitat_Scenario=case_when(prob_imp_for==0~"No habitat improvement",
                                            prob_imp_for==1~"Habitat improved"))
 
+mgmt<-dbGetQuery(con, "SELECT * FROM mgmt")
 mgmt<-dbGetQuery(con, "SELECT * FROM mgmt")
 
 mgmt<-mgmt%>%
@@ -52,7 +53,7 @@ mgmt<-mgmt%>%
                                                         !wait_for_habitat~"Right away"))
 
 mgmt_trim<-mgmt%>%
-  dplyr::select(Strategy_Name,Release_Time_String,SuppFeed,Individuals_Released,i,folder)%>%
+  dplyr::select(Release_Strategy_Name,Release_Time_String,SuppFeed,Individuals_Released,i,folder)%>%
   dplyr::left_join(run_pars%>%
                      dplyr::select(i,folder,Habitat_Scenario))
 
@@ -79,7 +80,7 @@ release_order <- c(
 
 resu<-summary%>%
   dplyr::left_join(mgmt_trim)%>%
-  dplyr::group_by(Habitat_Scenario,Release_Time_String,SuppFeed,Strategy_Name,Individuals_Released)%>%
+  dplyr::group_by(Habitat_Scenario,Release_Time_String,SuppFeed,Release_Strategy_Name,Individuals_Released)%>%
   dplyr::summarise(probPersist=1-mean(extinct),
                    propPopulationsDeclining=mean(trend<1),
                    avTrend=mean(trend),
@@ -87,11 +88,24 @@ resu<-summary%>%
                    finalFp=mean(Fp),
                    finalSp=mean(Sp))
 
-resu$Strategy_Name<-factor(resu$Strategy_Name,levels=release_order)
+resu$Release_Strategy_Name<-factor(resu$Release_Strategy_Name,levels=release_order)
 
 resu<-resu%>%dplyr::filter(scenario=="Habitat Improved")
 
 require(ggplot2)
+
+ggplot(data = resu%>%dplyr::filter(Individuals_Released>0))+
+  geom_jitter(aes(y=probPersist,x=finalFp))+
+  facet_wrap(Release_Time_String~Habitat_Scenario)
+
+ggplot(data = resu%>%dplyr::filter(Individuals_Released>0))+
+  geom_jitter(aes(y=finalSp,x=finalFp))+
+  facet_wrap(Release_Time_String~Habitat_Scenario)
+
+resu%>%dplyr::filter(Individuals_Released>0)%>%
+  dplyr::group_by(Release_Time_String,Habitat_Scenario)%>%
+  dplyr::summarise(n=n())
+
 
 ggplot(data=resu)+
   geom_line(aes(x=Individuals_Released,y=probPersist))+

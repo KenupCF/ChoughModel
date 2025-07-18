@@ -22,7 +22,7 @@ devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/maste
 devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/Quick%20Functions.R")
 
 
-sheet_url <- "https://docs.google.com/spreadsheets/d/1dCIkkofz0h2s9MWOtZfNqAN4DKY59Z2IqNIWlM3isMY/edit?gid=903185379#gid=903185379"
+sheet_url <- "https://docs.google.com/spreadsheets/d/1PBwtQlmPivdoU9BqLpySnyaCU6FsRvaSMJvlPHhHyts/edit?gid=903185379#gid=903185379"
 gs4_auth(path = "./.tokens/fresh-replica-344321-0e0618a3b5de.json")
 
 ### Acessing Google Drive
