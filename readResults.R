@@ -9,8 +9,9 @@ options(warn = 2)
 # SETUP
 folder_extr <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/bigRunsV3_LHS"
 folderID    <- gsub(x=folder_extr,"^.*/","")
-loopSize    <- 1e3
-time_limit_secs <- 60*60*(40/60)  #3 hours
+loopSize    <- 1e6
+time_limit_secs <- 60*60*(1)  #3 hours
+buffer_size<-25
 
 # Define processing function
 process_result_file <- function(filename,folder_id){
@@ -44,7 +45,7 @@ process_result_file <- function(filename,folder_id){
       unique
     
     if(length(released_individuals)>0){
-    release_deaths<-output$pop%>%
+    release_deaths_df<-output$pop%>%
       dplyr::filter(id%in%released_individuals,!alive)%>%
       dplyr::mutate(dead_before_first_june=case_when(age_release==0~age==1,
                                               age_release>0~tsr<=1))%>%
@@ -52,7 +53,10 @@ process_result_file <- function(filename,folder_id){
       dplyr::group_by(age_release)%>%
       dplyr::summarise(
         mortality=mean(dead_before_first_june),
-        expectedDeaths=sum(dead_before_first_june)^unique(yr_duration))%>%
+        noDead=sum(dead_before_first_june),
+        yr_duration=unique(yr_duration),
+        expectedDeaths=n()*(mortality^unique(yr_duration)))
+    release_deaths<-release_deaths_df%>%
       pull(expectedDeaths)%>%
       sum()
     }else{release_deaths<-0}
@@ -148,7 +152,7 @@ sapply(duplicated_files, file.remove)
 files_df <- files_df %>% filter(!duplicated(i))
 
 # CONNECT TO DUCKDB
-db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_bigv3.duckdb"
+db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_bigv3b.duckdb"
 con <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
 
 # Check which files have already been processed
@@ -174,7 +178,6 @@ pb <- progress_bar$new(
   clear = FALSE,
   width = 60
 )
-buffer_size<-20
 counter<-0
 
 # Prepare buffers
@@ -206,7 +209,7 @@ for (f in seq_len(nrow(files_df))) {
   buffer$run_pars[[f]]  <- result$run_pars
   
   
-  if(6==9){
+  # if(6==9){
   # if (f %% buffer_size == 0 || f == nrow(files_df)) {
     dbWriteTable(con, "summary",   bind_rows(buffer$summary), append = TRUE)
     dbWriteTable(con, "N_series",  bind_rows(buffer$N_series), append = TRUE)
@@ -215,7 +218,7 @@ for (f in seq_len(nrow(files_df))) {
     dbWriteTable(con, "run_pars",  bind_rows(buffer$run_pars), append = TRUE)
     
     buffer <- list(summary = list(), N_series = list(), egg_fate = list(), mgmt = list(), run_pars = list())
-  }
+  # }
   
   counter<-counter+1
   elapsed_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))

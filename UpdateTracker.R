@@ -14,12 +14,12 @@ source("functionLoader.R")
 devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/phd_experimental_functions.R")
 devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/Quick%20Functions.R")
 
-sheet_url <- "https://docs.google.com/spreadsheets/d/1dCIkkofz0h2s9MWOtZfNqAN4DKY59Z2IqNIWlM3isMY/edit?gid=903185379#gid=903185379"
+sheet_url <- "https://docs.google.com/spreadsheets/d/1PBwtQlmPivdoU9BqLpySnyaCU6FsRvaSMJvlPHhHyts/edit?gid=903185379#gid=903185379"
 gs4_auth(path = "./.tokens/fresh-replica-344321-0e0618a3b5de.json")
 require(stringr)
 
 # setwd("./Results/BackedUp")
-folder_extr<-"D:/03-Work/01-Science/00-Research Projects/RB Chough Results/bigRunsV2"
+folder_extr<-"D:/03-Work/01-Science/00-Research Projects/RB Chough Results/bigRunsV3_LHS"
 
 files<-list.files(path = folder_extr,pattern = ".RData",full.names = T)
 

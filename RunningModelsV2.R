@@ -349,7 +349,7 @@ if(model_pars$sim$parallel_across_runs){
     output$run_label <- all_iterations$Label[i]
     
     # Save output
-    filename_output <- paste0("./Results/", output$run_label, "_Resu_", zero_pad(i, 5), ".RData")
+    filename_output <- paste0("./Results/", output$run_label, "_Resu_", zero_pad(i, max(5,nchar(nrow(all_iterations)))), ".RData")
     save(output, file = filename_output)    
     
   }
