@@ -1,4 +1,4 @@
-runLabel<-"bigRunsV3_LHS"
+runLabel<-"bigRunsV4_LHS"
 get_runs_from_gsheet<-TRUE
 replace_runs_gsheet<-FALSE
 prior_rng_seed<-19910526
@@ -33,7 +33,7 @@ drive_auth(token = token)
 source(".tokens/setDeviceName.R")
 
 ### Import expert elicited info
-load("./Data/Expert_Elicitation_Aggregation.RData")
+load("./Data/Expert_Elicitation_Aggregation_v3.RData")
 
 ### Parameter setting
 model_pars<-list(priors=list(),sim=list(),bio=list(),mgmt=list())
