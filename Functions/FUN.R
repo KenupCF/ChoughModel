@@ -1002,6 +1002,7 @@ output_clean_up_zip <- function(rev = FALSE) {
   # Define zip filename
   zip_filename <- file.path(tempdir(), paste0("results_backup_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".zip"))
   
+  Sys.sleep(5)
   # Create zip file containing all files
   zip(zipfile = zip_filename, files = files, flags = "-j")  # -j removes directory structure
   
