@@ -1,3 +1,11 @@
+---
+title: "Untitled"
+author: "Caio"
+date: "2025-07-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
 # Set working directory based on available paths
 wd <- "/models/ChoughModel"
 if(!dir.exists(wd)){
@@ -39,6 +47,9 @@ run_pars <- run_pars %>%
 mgmt <- dbGetQuery(con, "SELECT * FROM mgmt")
 
 dbDisconnect(con, shutdown = TRUE)
+
+summary$release_deaths0<-summary$release_deaths
+summary$release_deaths<-summary$release_deaths + summary$total_eggs_lost
 
 # Derive additional labels and release strategy names
 mgmt <- mgmt %>%
@@ -149,14 +160,16 @@ mgmt_summ$SuppFeed             <- factor(mgmt_summ$SuppFeed, levels = sf_labels)
 mgmt_summ$Habitat_Scenario             <- factor(mgmt_summ$Habitat_Scenario, levels = hb_labels)
 mgmt_summ$Release_Time_String             <- factor(mgmt_summ$Release_Time_String, levels = c("No releases","Now","Wait"))
 
+
 mgmt_summ$kept<-mgmt_summ$SuppFeed==sf_labels[1] & mgmt_summ$Age_Release_String!="Eggs"
 
 # Merge summary data with management and run indexes
 dat <- summary %>%
   dplyr::left_join(mgmt_trim%>%select(i,alt))%>%
   dplyr::left_join(mgmt_summ)%>%
-  dplyr::left_join(run_pars %>% dplyr::select(i, p, alt))
-  
+  dplyr::left_join(run_pars %>% dplyr::select(i, p, alt))%>%
+  dplyr::mutate(ConditionalSp=case_when(extinct~NA,TRUE~Sp))
+
 
 # Summarise results by strategy, habitat and feeding
 resu <- dat %>%
@@ -178,9 +191,12 @@ resu <- dat %>%
     avFp = mean(Fp),
     lclFp = quantile(Fp, 0.025, na.rm = TRUE),
     uclFp = quantile(Fp, 0.975, na.rm = TRUE),
-    avSp = mean(Sp),
+    avSp = mean(Sp,na.rm=T),
     lclSp = quantile(Sp, 0.025, na.rm = TRUE),
-    uclSp = quantile(Sp, 0.975, na.rm = TRUE)
+    uclSp = quantile(Sp, 0.975, na.rm = TRUE),
+    avCSp = mean(ConditionalSp,na.rm=T),
+    lclCSp = quantile(ConditionalSp, 0.025, na.rm = TRUE),
+    uclCSp = quantile(ConditionalSp, 0.975, na.rm = TRUE)
   ) %>%
   dplyr::mutate(
     reportTrend = sprintf("%.2f (%.2f-%.2f)", avTrend, lclTrend, uclTrend),
@@ -194,15 +210,153 @@ resu <- dat %>%
 resu <- resu %>%
   dplyr::left_join(mgmt_summ)
 
-# Ensure proper ordering of factor levels for plotting
-
-
-#### evaluating dominance of supplementary feeding
-
 dat<-dat%>%
   left_join(mgmt_summ)
 
+resu<-resu%>%
+  dplyr::arrange(SuppFeed,Release_Strategy_Name,Release_Time_String,Habitat_Scenario)
 
+# Ensure proper ordering of factor levels for plotting
+write.csv(resu,file="full_consequence_table.csv")
+
+age_colors<- setNames(brewer.pal(length(age_order), "Set2"), age_order)%>%
+  darken(amount = 0)
+
+```
+
+## Release size test
+
+```{r sizes, echo=FALSE}
+
+
+# Connect to DuckDB database
+db_path <- "D:/03-Work/01-Science/00-Research Projects/RB Chough Results/results_sizes_altered.duckdb"
+con <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
+# 
+# # Load tables from the DuckDB database
+summary_size_test <- dbGetQuery(con, "SELECT * FROM summary")
+run_pars_size_test <- dbGetQuery(con, "SELECT * FROM run_pars")
+mgmt_size_test <- dbGetQuery(con, "SELECT * FROM mgmt")
+
+dbDisconnect(con, shutdown = TRUE)
+
+
+# Derive additional labels and release strategy names
+mgmt_size_test <- mgmt_size_test %>%
+  dplyr::mutate(
+    Individuals_Released = case_when(
+      noEggsReleased > 0 ~ noEggsReleased,
+      TRUE ~ release_size
+    ),
+    Age_Release_String = case_when(
+      Individuals_Released == 0 ~ "No releases",
+      noEggsReleased > 0 & nest_aband_allowed ~ "Eggs",
+      noEggsReleased > 0 & !nest_aband_allowed ~ "Eggs+",
+      age_release == 1 ~ "First year",
+      age_release == 2 ~ "Sub-adults",
+      age_release == 3 ~ "Adults"
+    ),
+    Origin_String = substr(origin, 1, 1),
+    Method_String = substr(release_meth, 1, 2),
+    Habituation_String = case_when(
+      habituation == 0 ~ "NH",
+      habituation == 1 ~ "H"
+    )
+  ) %>%
+  dplyr::mutate(
+    Release_Strategy_Name = case_when(
+      Individuals_Released == 0 ~ "No releases",
+      str_detect(Age_Release_String, "Eggs") ~ Age_Release_String,
+      age_release == 1 ~ paste0(Age_Release_String, " - ", release_time, 
+                                " (", Origin_String, "-", Method_String, "-", Habituation_String, ")"),
+      age_release %in% c(2, 3) ~ paste0(Age_Release_String, 
+                                        " (", Origin_String, "-", Method_String, "-", Habituation_String, ")"),
+      TRUE ~ NA
+    ),
+    Release_Time_String = case_when(
+      release_size == 0 & noEggsReleased == 0 ~ "No releases",
+      wait_for_habitat ~ "Wait",
+      !wait_for_habitat ~ "Now"
+    ),
+    SuppFeed = case_when(
+      SuppFeed == "Current" ~ sf_labels[1],
+      SuppFeed == "Provisional" ~ sf_labels[2]
+    )
+  )
+
+# Define custom order for plotting strategies
+release_order <- c(
+  "No releases",
+  "Eggs", "Eggs+",
+  "First year - Summer (C-St-H)", "First year - Summer (W-St-H)",
+  "First year - Winter (C-St-H)", "First year - Winter (W-St-H)",
+  "Sub-adults (C-St-H)", "Sub-adults (W-St-H)",
+  "Sub-adults (C-St-NH)", "Sub-adults (W-St-NH)",
+  "Adults (C-St-H)", "Adults (C-St-NH)", "Adults (W-Im-NH)"
+)
+
+# Define custom order for plotting strategies
+age_order <- c(
+  "No releases",
+  "Eggs", "Eggs+",
+  "First year",
+  "Sub-adults",
+  "Adults"
+)
+
+# Prepare trimmed version of mgmt data with selected variables
+mgmt_trim_st <- mgmt_size_test %>%
+  dplyr::select(Release_Strategy_Name, Release_Time_String, SuppFeed,release_time,
+                Individuals_Released, i, folder, Age_Release_String) %>%
+  dplyr::left_join(run_pars_size_test %>%
+                     dplyr::select(i, folder, alt,p))
+
+# Get one row per alternative to summarize management strategies
+mgmt_summ_st <- mgmt_trim_st %>%
+  dplyr::filter(!duplicated(data.frame(alt,folder))) %>%
+  dplyr::select(alt, Individuals_Released,Release_Strategy_Name, Release_Time_String, release_time,
+                SuppFeed, Age_Release_String,folder)%>%
+  dplyr::mutate(Habitat_Scenario=case_when(
+    folder=="testReleaseSizesV2"~hb_labels[2],
+    folder=="testReleaseSizesV1"~hb_labels[1]
+  ))
+
+st_plot<-summary_size_test%>%
+    dplyr::left_join(run_pars_size_test %>%
+                     dplyr::select(i,alt,folder,p))%>%
+  dplyr::group_by(folder,alt)%>%
+  dplyr::mutate(probPersist=1-mean(extinct))%>%
+  left_join(mgmt_summ_st)
+  
+st_plot2<-st_plot%>%
+  dplyr::filter(Age_Release_String!="Eggs",Habitat_Scenario%in%hb_labels[1:2])%>%
+  dplyr::ungroup()
+
+
+str(st_plot)
+str(age_colors)
+st_plot2$Age_Release_String<-factor(st_plot2$Age_Release_String,levels=age_order)
+
+size_test_plot<-ggplot(data=st_plot2,
+       mapping =aes(x=Individuals_Released,
+                    y=probPersist,
+                    group=Release_Strategy_Name,
+                    color=Age_Release_String))+
+  geom_line(lwd=1.5)+
+  scale_color_manual(values = age_colors)+
+  facet_wrap(~Habitat_Scenario,scales = "free_y",ncol = 1)+
+  labs(y="Probability of Persistence",x="Number of individuals released",color="Age of Release")+
+  theme_minimal()
+
+ggsave(plot=size_test_plot,filename = "./Analysis/size_test.tiff",width = 6,height = 9)
+
+```
+
+## SuppFeed Dominance
+
+```{r cars}
+
+#### evaluating dominance of supplementary feeding
 
 supp_feed_dat<-dat%>%
   dplyr::group_by(alt_sf,p)%>%
@@ -237,7 +391,6 @@ supp_feed_summary<-resu%>%
 
 write.csv(supp_feed_dat,file="supp_feed_summary.csv")
 
-
 releasing_time_summ<-resu%>%
   dplyr::filter(SuppFeed=="Continuous",Release_Strategy_Name!="No releases")%>%
   dplyr::group_by(alt_rt)%>%
@@ -253,8 +406,14 @@ releasing_time_summ<-resu%>%
 
 write.csv(releasing_time_summ,file="releasing_time_summ.csv")
 
-write.csv(resu,file="full_consequence_table.csv")
 
+```
+
+## Rest
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
 
 
 plot1_df<-resu %>%
@@ -293,12 +452,15 @@ mapping<-resu_plot%>%filter(kept & !duplicated(Age_Timing_String))%>%
   dplyr::select(Age_Release_String,Release_Time_String,Age_Timing_String,Age_Timing_backend)
 
 resu_plot$Age_Timing_backend<-factor(resu_plot$Age_Timing_backend,levels=mapping$Age_Timing_backend)
-age_levels <- mapping$Age_Release_String
-base_colors <- setNames(brewer.pal(length(age_levels), "Set2"), age_levels)
+age_levels <- mapping$Age_Release_String%>%unique
+
+# base_colors <- setNames(brewer.pal(length(age_levels), "Set2"), age_levels)%>%
+  # darken(amount = 0)
+base_colors<-age_colors
 
 time_shades <- c("Now" = 0.4, "Wait" = 0)  # lighten 'Now' a bit, keep 'Wait' as-is
 
-fill_levels <- unique(mapping$Age_Timing_backend)
+fill_levels <- unique(mapping$Age_Timing_backend)%>%as.character()
 fill_colors <- setNames(
   vapply(fill_levels, function(fg) {
     parts <- strsplit(fg, "_")[[1]]
@@ -332,32 +494,188 @@ prob_persist_compare_plot<-ggplot(
                     ,  labels = legend_labels
                     ) +
   labs(
-    x = "Release Strategy",
-    y = "Probability of Persistence",
+    x = "\nRelease Strategy",
+    y = "Probability of Persistence\n",
     fill = "Age and Timing of Release"
   ) +
-  theme_minimal()+
+  theme_minimal(base_size=14)+
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
 
-ggplot(data=resu_plot%>%filter(kept),mapping = aes(x=avSp,y=avFp,color=Age_Release_String,pch=Release_Time_String))+
-  geom_point(size=3)+
-  facet_wrap(~Habitat_Scenario)
 
-ggplot(data=resu_plot%>%filter(kept),mapping = aes(x=avFp,y=probPersist,color=Age_Release_String,pch=Release_Time_String))+
-  geom_point(size=3)+
-  facet_wrap(~Habitat_Scenario)
+death_releases_compare_plot<-ggplot(
+  data = resu_plot %>% 
+    dplyr::filter(kept, Habitat_Scenario %in% hb_labels[1:2]
+                              ,Age_Release_String!="No releases"
+                              ),
+  aes(
+    y = avDeathReleases,
+    x = Release_Strategy_Name,
+    fill = Age_Timing_backend
+  )
+) +
+  geom_bar(
+    stat = "identity",
+    position = position_dodge(width = 0.8),
+    color = NA,
+    width = 0.7
+  ) +
+  facet_wrap(. ~ Habitat_Scenario) +
+  scale_fill_manual(values = fill_colors
+                    ,  labels = legend_labels[
+                      c(-1,-2)
+                      ]
+                    ) +
+  labs(
+    x = "\nRelease Strategy",
+    y = "Number of Post-release Deaths\n",
+    fill = "Age and Timing of Release"
+  ) +
+  theme_minimal(base_size=14)+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
 
-age_strat_plot<-ggplot(data=dat_plot%>%filter(kept),aes(x=trend,group=Age_Release_String,color=Age_Release_String))+
-  geom_density(aes(fill=Age_Release_String),color=NA,alpha=.5,bw=.01)+
-  facet_grid(Habitat_Scenario~Release_Time_String)+
-  geom_vline(xintercept = 1,lty="dotted")
+provenance_compare_plot2<-ggplot(
+  data = resu_plot %>% 
+    dplyr::filter(kept, Habitat_Scenario %in% hb_labels[1:2]
+                              )%>%
+    # dplyr::mutate(avCSp=case_when(probPersist==0~0,
+                                 # TRUE~avCSp))
+    ungroup()
+  ,aes(
+    y = avSp,
+    x = Release_Strategy_Name,
+    fill = Age_Timing_backend
+  )
+) +
+  geom_bar(
+    stat = "identity",
+    position = position_dodge(width = 0.8),
+    color = NA,
+    width = 0.7
+  ) +
+  facet_wrap(. ~ Habitat_Scenario) +
+  scale_fill_manual(values = fill_colors
+                    ,  labels = legend_labels[
+                      # c(-1,-2)
+                      ]
+                    ) +
+  labs(
+    x = "\nRelease Strategy",
+    y = "Average scottish provenance\n",
+    fill = "Age and Timing of Release"
+  ) +
+  theme_minimal(base_size=14)+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
 
-ggplot(data = resu_plot%>%filter(kept),
-       aes(y=probPersist,x=Release_Strategy_Name,fill=Age_Release_String))+
-  geom_bar(stat="identity",color=NA)+
-  facet_grid(Release_Time_String~Habitat_Scenario)
+# Step 1: Filter your data
+dat_density <- dat_plot %>% filter(kept)
+
+# Step 2: Compute densities and extract mean + max height at mean
+mean_lines <- dat_density %>%
+  group_by(Habitat_Scenario, Release_Time_String, Age_Release_String) %>%
+  summarise(
+    mean_trend = mean(trend),
+    .groups = "drop"
+  ) %>%
+  rowwise() %>%
+  mutate(
+    dens = list(density(dat_density$trend[
+      dat_density$Habitat_Scenario == Habitat_Scenario &
+      dat_density$Release_Time_String == Release_Time_String &
+      dat_density$Age_Release_String == Age_Release_String
+    ], bw = 0.01)),
+    y_at_mean = approx(x = dens$x, y = dens$y, xout = mean_trend)$y
+  ) %>%
+  ungroup()
+
+fake_line_legend_dat<-data.frame(type=c("solid","dotted"),x=1,y=0,label=c("Average","Population equilibrium"))
+
+# Step 3: Now build your plot
+age_strat_plot <- ggplot(data = dat_density,
+                         aes(x = trend, group = Age_Release_String, color = Age_Release_String)) +
+  geom_line(data = fake_line_legend_dat,mapping = aes(x=x,y=y,lty=label,group=label),color="black")+
+  geom_density(aes(fill = Age_Release_String), color = NA, alpha = 0.5, bw = 0.01) +
+  facet_grid(Habitat_Scenario ~ Release_Time_String) +
+  scale_linetype_manual(values=fake_line_legend_dat$type)+
+  scale_fill_manual(values = base_colors) +
+  scale_color_manual(values = base_colors) +
+  geom_vline(xintercept = 1, lty = "dotted") +
+  # Step 4: Add segment for mean
+  geom_segment(
+    data = mean_lines,
+    aes(x = mean_trend, xend = mean_trend, y = 0, yend = y_at_mean, color = Age_Release_String),
+    show.legend = FALSE,
+    inherit.aes = FALSE,
+    linetype = "solid"
+  ) +
+  labs(y = "Probability density\n", x = "\nYearly trend", fill = "Age of Release",linetype="") +
+  guides(fill = guide_legend(override.aes = list(alpha = 1))) +
+  theme_minimal(base_size=14) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+ggsave(plot = prob_persist_compare_plot,width = 12,height=6,filename="./Analysis/Persistence_plot.tiff")
+ggsave(plot = death_releases_compare_plot,width = 12,height=6,filename="./Analysis/Deaths_plot.tiff")
+ggsave(plot = provenance_compare_plot2,width = 12,height=6,filename="./Analysis/Sp_plot.tiff")
+ggsave(plot = age_strat_plot,width = 12,height=6,filename="./Analysis/Trend_plot.tiff")
+
+
+
+trade_off_plot_tidy<-function(p){
+  p+
+    geom_point(size=2)+
+    scale_color_manual(values = base_colors) +
+    facet_wrap(~Habitat_Scenario)+
+    theme_minimal(base_size=12)
+  
+}
+
+library(patchwork)
+
+
+Sp_by_Persistence<-(ggplot(data=resu_plot%>%filter(kept),
+       mapping = aes(x=avSp,y=probPersist,color=Age_Release_String,pch=Release_Time_String))+
+  labs(x="Average Provenance",y="Probability of Persistence\n",color="Age of Release",pch="Time of Release"))%>%
+  trade_off_plot_tidy()
+
+Persistence_by_Deaths<-(ggplot(data=resu_plot%>%filter(kept),
+       mapping = aes(x=avDeathReleases,y=probPersist,color=Age_Release_String,pch=Release_Time_String))+
+  labs(x="Post-release Deaths",y="Probability of Persistence\n",color="Age of Release",pch="Time of Release"))%>%
+  trade_off_plot_tidy()
+
+Sp_by_Deaths<-((ggplot(data=resu_plot%>%filter(kept),
+       mapping = aes(x=avDeathReleases,y=avSp,color=Age_Release_String,pch=Release_Time_String))+
+  labs(x="Post-release Deaths",y="Average Provenance\n",color="Age of Release",pch="Time of Release")))%>%
+  trade_off_plot_tidy()
+
+ spaced_theme <- theme(
+  plot.margin = margin(5, 5, 5, 5)
+)
+ 
+ # Adjust spacing as needed
+ 
+# Combine plots with shared legend
+final_plot <- (
+  (Sp_by_Persistence + spaced_theme) / 
+  (Persistence_by_Deaths + spaced_theme) /
+  Sp_by_Deaths +
+  plot_layout(ncol = 1, guides = "collect") & 
+  theme(
+    legend.position = "bottom",
+    legend.box = "vertical",           # Stack legends vertically
+    legend.title.position = "top"      # Put titles above items
+  )
+) +
+  plot_annotation(tag_levels = "A")
+
+
+ggsave(plot = final_plot,width = 6,height=10,filename="./Analysis/Trade_off_plot.tiff")
+
 
 ggplot(
   data = resu_plot %>% filter(kept,Habitat_Scenario%in%hb_labels[1:2]),
@@ -375,7 +693,7 @@ ggplot(
   ) +
   facet_wrap(. ~ Habitat_Scenario) +
   labs(
-    x = "Release Strategy",
+    x = "\nRelease Strategy",
     y = "Probability of Persistence",
     fill = "Timing of Release"
   ) +
@@ -401,10 +719,15 @@ for(age in age_order[-1]){
 }
 
 
+```
 
-#### using probability uncertainty to merge nodes on the decision tree
-if(6==9){
-  
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+```{r solvingRisk}
+
+
   ### Import expert elicited info
   load("./Data/Expert_Elicitation_Aggregation.RData")
   devtools::source_url("https://raw.githubusercontent.com/KenupCF/Kenup-Repo/master/phd_experimental_functions.R")
@@ -444,15 +767,20 @@ dat2<-dat%>%
 risk_outcomes<-dat2%>%
   dplyr::filter(kept)%>%
   dplyr::group_by(p,alt_hs)%>%
-  dplyr::summarise(Mtrend=sum(trend*prob),
-                   Btrend=max(trend),
-                   Wtrend=min(trend),
+  dplyr::arrange(desc(Habitat_Scenario))%>%
+  dplyr::summarise(n=n(),
+                   Mtrend=sum(trend*prob),
+                   Btrend=trend[2],
+                   Wtrend=trend[1],
                    Mpersist=sum((1-extinct)*prob),
-                   Bpersist=max(1-extinct),
-                   Wpersist=min(1-extinct),
+                   Bpersist=!extinct[2],
+                   Wpersist=!extinct[1],
+                   Mprov=sum(Sp*prob,na.rm=T),
+                   Bprov=Sp[2],
+                   Wprov=Sp[1],
                    Mdeaths=sum(release_deaths*prob),
-                   Bdeaths=min(release_deaths),
-                   Wdeaths=max(release_deaths))%>%
+                   Bdeaths=release_deaths[2],
+                   Wdeaths=release_deaths[1])%>%
   dplyr::left_join(mgmt_summ%>%filter(!duplicated(alt_hs)))
 
 
@@ -460,28 +788,69 @@ risk_outcomes_summ<-risk_outcomes%>%
   dplyr::group_by(alt_hs)%>%
   dplyr::summarise(
                    LCLRNtrend=quantile(Mtrend,.025),
-                   AvRNtrend=mean(Mtrend),
+                   AvRNtrend=mean(Mtrend,na.rm=T),
                    UCLRNtrend=quantile(Mtrend,.975),
                    # LCLRNpersist=quantile(Mpersist,.025),
                    AvRNpersist=mean(Mpersist),
+                   AvRNprov=mean(Mprov,na.rm=T),
+                   AvRSprov=mean(Bprov,na.rm=T),
+                   AvRAprov=mean(Wprov,na.rm=T),
                    # UCLRNpersist=quantile(Mpersist,.975),
                    LCLRStrend=quantile(Btrend,.025),
-                   AvRStrend=mean(Btrend),
+                   AvRStrend=mean(Btrend,na.rm=T),
                    UCLRStrend=quantile(Btrend,.975),
                    # LCLRSpersist=quantile(Bpersist,.025),
-                   AvRSpersist=mean(Bpersist),
+                   AvRSpersist=mean(Bpersist,na.rm=T),
                    # UCLRSpersist=quantile(Bpersist,.975),
                    LCLRAtrend=quantile(Wtrend,.025),
-                   AvRAtrend=mean(Wtrend),
+                   AvRAtrend=mean(Wtrend,na.rm=T),
                    UCLRAtrend=quantile(Wtrend,.975),
                    # LCLRApersist=quantile(Wpersist,.025),
                    AvRApersist=mean(Wpersist),
                    # UCLRApersist=quantile(Wpersist,.975),
-                   AvRNdeaths=mean(Mdeaths),
-                   AvRAdeaths=mean(Wdeaths),
-                   AvRSdeaths=mean(Bdeaths))%>%
-  dplyr::select(AvRNpersist,AvRApersist,AvRSpersist,AvRNdeaths,AvRAdeaths,AvRSdeaths,alt_hs)%>%
-  dplyr::left_join(mgmt_summ%>%filter(!duplicated(alt_hs)))
-  
-}
+                   AvRNdeaths=mean(Mdeaths,na.rm=T),
+                   AvRAdeaths=mean(Wdeaths,na.rm=T),
+                   AvRSdeaths=mean(Bdeaths,na.rm=T))%>%
+  dplyr::select(AvRNpersist,AvRApersist,AvRSpersist,AvRNdeaths,
+                AvRAprov,AvRSprov,AvRNprov
+                ,AvRAdeaths,AvRSdeaths,alt_hs)%>%
+  # dplyr::mutate(AvRAprov=case_when(is.nan(AvRAprov)~"N/A",
+                                   # TRUE~sprintf("%.2f",AvRAprov)))%>%
+  dplyr::mutate(display_persist = sprintf("%.3f (%.3f – %.3f)", AvRNpersist, AvRApersist, AvRSpersist),
+    display_prov = dplyr::if_else(
+      is.nan(AvRAprov),
+      sprintf("%.2f (N/A – %.2f)", AvRNprov,AvRSprov),
+      sprintf("%.2f (%.2f – %.2f)", AvRNprov, AvRAprov, AvRSprov)
+    ),
+    display_deaths = sprintf("%.0f (%.0f – %.0f)", AvRNdeaths, AvRAdeaths, AvRSdeaths))%>%
 
+  dplyr::left_join(mgmt_summ%>%
+                     dplyr::filter(!duplicated(alt_hs))%>%
+                     dplyr::mutate(Habitat_Scenario=NULL))%>%
+  dplyr::arrange(Age_Release_String)
+
+write.csv(risk_outcomes_summ,file = ".\\Analysis\\risk_solved_summ.csv")
+
+str(risk_outcomes_summ)
+
+
+df_wide <- risk_outcomes_summ %>%
+  mutate(Release_Time_String=case_when(Release_Time_String=="No releases"~"Now",
+         TRUE~Release_Time_String))%>%
+  filter(Release_Time_String %in% c("Wait", "Now")
+         # ,Age_Release_String != "No releases"
+         ) %>%
+  group_by(Release_Strategy_Name, Release_Time_String) %>%
+  summarise(across(starts_with("display_"), unique, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(
+    names_from = Release_Time_String,
+    values_from = starts_with("display_"),
+    names_glue = "{.value}_{Release_Time_String}"
+  )
+
+write.csv(df_wide,file = ".\\Analysis\\risk_solved_summ_wide.csv")
+
+
+```
+
+```

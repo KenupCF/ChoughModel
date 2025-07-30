@@ -16,7 +16,7 @@ resource_files: "Libraries/datatables-rowsgroup-master/dataTables.rowsGroup.js"
 
 useshiny<-FALSE
 toggleComment<-TRUE
-downloadFromDrive<-F
+downloadFromDrive<-T
 plotShadeToggle<-F
 options(stringsAsFactors = FALSE)
 
@@ -831,7 +831,7 @@ agg_info<-list(LP=
                )
 
 
-save(agg_info,linear_pool_qsample,linear_pool_pdf,file=("./Data/Expert_Elicitation_Aggregation_v2.RData"))
+save(agg_info,linear_pool_qsample,linear_pool_pdf,file=("./Data/Expert_Elicitation_Aggregation_v3.RData"))
 
 
 
