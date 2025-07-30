@@ -23,8 +23,8 @@ model_pars$priors$Q_improved_foraging_year <- qrunif_template
 # Define management timing for release seasons
 model_pars$mgmt$release_year_cont <- data.frame(
   release_time = c(NA, "Summer", "Winter"),
-  yr_duration  = c(1, 1-(2/12), 1-(8/12))
-)
+  # yr_duration  = c(1, 1-(2/12), 1-(8/12)) )  # if "year" starts in july
+  yr_duration  = c(1, 1-(3/12), 1-(9/12)) )    # if "year" starts in june
 
 # Define supplementary feeding strategies
 model_pars$mgmt$supp_feeding_master <- list(
